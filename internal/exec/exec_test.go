@@ -177,3 +177,24 @@ func TestRuleIn(t *testing.T) {
 		t.Fatal("IN pattern failed to match")
 	}
 }
+
+func TestOf(t *testing.T) {
+	rule := `
+rule OfExample1
+{
+    strings:
+        $a = "dummy1"
+        $b = "dummy2"
+        $c = "dummy3"
+
+    condition:
+        2 of ($a,$b,$c)
+}
+`
+
+	input := "dummy2 dummy3"
+	out, _ := testCompile(rule, input)
+	if len(out) == 0 {
+		t.Fatal("OF pattern failed to match")
+	}
+}

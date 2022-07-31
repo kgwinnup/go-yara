@@ -27,6 +27,7 @@ const (
 	SHIFTRIGHT
 	AT
 	IN
+	OF
 )
 
 type Op struct {
@@ -77,6 +78,8 @@ func (o Op) String() string {
 		return "AT"
 	case IN:
 		return fmt.Sprintf("IN %v", o.VarParam)
+	case OF:
+		return fmt.Sprintf("OF %v", o.IntParam)
 	default:
 		return "WAT"
 	}
@@ -286,6 +289,33 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 
 				push(int64(result))
 
+			} else {
+				push(0)
+			}
+
+		case OF:
+			set := make([]int64, 0)
+			setSize := pop()
+
+			for i := 0; i < int(setSize); i++ {
+				set = append(set, pop())
+			}
+
+			count := 0
+			for _, n := range set {
+				if n > 0 {
+					count++
+				}
+
+				if count >= int(cur.IntParam) {
+					break
+				}
+			}
+
+			if cur.IntParam > 0 && count >= int(cur.IntParam) {
+				push(1)
+			} else if cur.IntParam == 0 && count == 0 { // none of ($*)
+				push(1)
 			} else {
 				push(0)
 			}

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kgwinnup/go-yara/internal/exec"
+	"github.com/kgwinnup/go-yara/yara"
 )
 
 func main() {
@@ -35,14 +35,14 @@ func main() {
 		rule = string(bs)
 	}
 
-	compiled, err := exec.Compile(rule)
+	yara, err := yara.New(rule)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
 	if *debug {
-		compiled.Debug()
+		yara.Debug()
 	}
 
 	for i, arg := range flag.Args() {
@@ -57,7 +57,7 @@ func main() {
 			continue
 		}
 
-		output, err := compiled.Scan(contents)
+		output, err := yara.Scan(contents)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			continue

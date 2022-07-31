@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/kgwinnup/go-yara/internal/ast"
@@ -155,6 +154,22 @@ func TestParseBytes(t *testing.T) {
 	}
 
 	if len(bytes.Items) != 9 {
-		t.Fatal(fmt.Sprintf("expecting 6 byte nodes, got %v", len(bytes.Items)))
+		t.Fatalf("expecting 6 byte nodes, got %v", len(bytes.Items))
+	}
+}
+
+func TestParseSet(t *testing.T) {
+	input := "($a, $b, $c)"
+
+	parser := test(input)
+	node, _ := parser.parseExpr(0)
+
+	set, ok := node.(*ast.Set)
+	if !ok {
+		t.Fatalf("expecting a set, got %v", node.Type())
+	}
+
+	if len(set.Nodes) != 3 {
+		t.Fatalf("expecting a set of 3, got %v", len(set.Nodes))
 	}
 }

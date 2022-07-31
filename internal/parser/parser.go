@@ -313,6 +313,7 @@ var prefixPower = map[int][]int{
 var infixPower = map[int][]int{
 	lexer.OR:          {1, 2},
 	lexer.AND:         {3, 4},
+	lexer.COMMA:       {5, 6},
 	lexer.MATCHES:     {7, 8},
 	lexer.IEQUALS:     {7, 8},
 	lexer.IENDSWITH:   {7, 8},
@@ -346,6 +347,25 @@ var infixPower = map[int][]int{
 	lexer.LBRACKET:    {25, 26},
 }
 
+func (p *Parser) makeSet(node ast.Node) ast.Node {
+
+	temp := node
+	ret := make([]ast.Node, 0)
+
+	for {
+		if infix, ok := temp.(*ast.Infix); ok && infix.Token.Type == lexer.COMMA {
+			ret = append(ret, infix.Right)
+			temp = infix.Left
+			continue
+		}
+
+		ret = append(ret, temp)
+		break
+	}
+
+	return &ast.Set{Nodes: ret}
+}
+
 func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 	p.whitespace()
@@ -370,6 +390,7 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 			if err != nil {
 				return nil, err
 			}
+
 		}
 
 		if op.Type == lexer.LBRACKET {
@@ -379,9 +400,21 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 			}
 		}
 
-		left = &ast.Prefix{
-			Token: op,
-			Right: expr,
+		if op.Type == lexer.LPAREN {
+			// check if this is a set definition ($a,$b,$c)
+			if infix, ok := expr.(*ast.Infix); ok && infix.Token.Type == lexer.COMMA {
+				left = p.makeSet(infix)
+			} else {
+				left = &ast.Prefix{
+					Token: op,
+					Right: expr,
+				}
+			}
+		} else {
+			left = &ast.Prefix{
+				Token: op,
+				Right: expr,
+			}
 		}
 
 	} else {

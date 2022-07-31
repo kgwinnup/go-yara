@@ -15,13 +15,12 @@ type Rule struct {
 	instr    []Op
 	deps     []string
 	finished bool
-	result   int
 	tags     []string
 	name     string
 }
 
 type CompiledRules struct {
-	rules map[string]*Rule
+	rules []*Rule
 	// stores a Pattern object by its RuleName_Var key
 	// this is used when evaluating the condition. Each pattern
 	// contains information about the indexes within the input bytes
@@ -75,7 +74,7 @@ func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 		nodeIdNocase = next(c.automataNocase, nodeIdNocase, toLower(b), i)
 	}
 
-	for name, rule := range c.rules {
+	for _, rule := range c.rules {
 		out, err := eval(rule, c.mappings)
 		if err != nil {
 			return nil, err
@@ -83,9 +82,16 @@ func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 
 		if out > 0 {
 			output = append(output, &ScanOutput{
-				Name: name,
+				Name: rule.name,
 				Tags: rule.tags,
 			})
+
+			// add this rule to the global state for other rules to
+			// reference
+			c.mappings[rule.name] = &ConstantPattern{
+				name: rule.name,
+				size: int(out),
+			}
 		}
 	}
 
@@ -124,12 +130,17 @@ func toLower(b byte) byte {
 	return b
 }
 
+type SubPattern struct {
+	Pattern []byte
+	Offset  int
+}
+
 // compile is the internal compile function for iterating over all the
 // parsed rules and creating the automaton and other structures
 func compile(rules []*ast.Rule) (*CompiledRules, error) {
 
 	compiled := &CompiledRules{
-		rules:    make(map[string]*Rule),
+		rules:    make([]*Rule, 0),
 		mappings: make(map[string]Pattern),
 	}
 
@@ -142,7 +153,6 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 			instr:    make([]Op, 0),
 			deps:     make([]string, 0),
 			finished: false,
-			result:   0,
 			tags:     rule.Tags,
 			name:     rule.Name,
 		}
@@ -151,51 +161,49 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 		for _, node := range rule.Strings {
 			if assign, ok := node.(*ast.Assignment); ok {
 
-				patternSlice, nocase, err := assign.BytePattern()
+				patternSlice, _, nocase, err := assign.BytePattern()
 				if err != nil {
 					return nil, err
 				}
 
-				for _, p := range patternSlice {
-					hash := fmt.Sprintf("%x", sha256.Sum256([]byte(assign.Right.String())))
+				hash := fmt.Sprintf("%x", sha256.Sum256([]byte(assign.Right.String())))
 
-					temp := &StringPattern{
-						name:    fmt.Sprintf("%v_%v", rule.Name, assign.Left),
-						nocase:  nocase,
-						pattern: p,
-						rule:    rule.Name,
-					}
+				temp := &StringPattern{
+					name:    fmt.Sprintf("%v_%v", rule.Name, assign.Left),
+					nocase:  nocase,
+					pattern: patternSlice,
+					rule:    rule.Name,
+				}
 
-					// check if the pattern is identical to another existing pattern. If
-					// so add a pointer with this patterns name to point to the existing
-					// identical pattern. This prevents duplicate items being added to the
-					// automaton.
-					pattern, ok := dups[hash]
-					if ok {
-						compiled.mappings[temp.name] = pattern
-					} else {
-						dups[hash] = temp
+				// check if the pattern is identical to another existing pattern. If
+				// so add a pointer with this patterns name to point to the existing
+				// identical pattern. This prevents duplicate items being added to the
+				// automaton.
+				pattern, ok := dups[hash]
+				if ok {
+					compiled.mappings[temp.name] = pattern
+				} else {
+					dups[hash] = temp
 
-						if temp.nocase {
-							for i := 0; i < len(temp.pattern); i++ {
-								temp.pattern[i] = toLower(temp.pattern[i])
-							}
-
-							patternsNocase = append(patternsNocase, temp)
-						} else {
-							patterns = append(patterns, temp)
+					if temp.nocase {
+						for i := 0; i < len(temp.pattern); i++ {
+							temp.pattern[i] = toLower(temp.pattern[i])
 						}
 
-						compiled.mappings[temp.name] = temp
+						patternsNocase = append(patternsNocase, temp)
+					} else {
+						patterns = append(patterns, temp)
 					}
+
+					compiled.mappings[temp.name] = temp
 				}
 			}
 		}
 
-		compiled.rules[rule.Name] = compiledRule
+		compiled.rules = append(compiled.rules, compiledRule)
 
 		instr := make([]Op, 0)
-		err := compileCondition(rule.Name, rule.Condition, &instr)
+		err := compiled.compileCondition(rule.Name, rule.Condition, &instr)
 		if err != nil {
 			return nil, err
 		}
@@ -211,14 +219,26 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 	return compiled, nil
 }
 
-func compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
+func (c *CompiledRules) patternsInRule(ruleName string) []string {
+	patterns := make([]string, 0)
+
+	for key := range c.mappings {
+		if strings.HasPrefix(key, ruleName) {
+			patterns = append(patterns, key)
+		}
+	}
+
+	return patterns
+}
+
+func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
 
 	if infix, ok := node.(*ast.Infix); ok {
 
 		// some infix operations do not require pushing the variable as a single instruction
 		switch infix.Token.Type {
 		case lexer.IN:
-			compileCondition(ruleName, infix.Right, accum)
+			c.compileCondition(ruleName, infix.Right, accum)
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
 				*accum = append(*accum, Op{OpCode: IN, VarParam: name})
@@ -227,10 +247,40 @@ func compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
 			}
 
 			return nil
+
+		case lexer.OF:
+
+			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
+				names := c.patternsInRule(ruleName)
+				for _, name := range names {
+					*accum = append(*accum, Op{OpCode: LOAD, VarParam: name})
+				}
+			} else {
+				c.compileCondition(ruleName, infix.Right, accum)
+			}
+
+			if integer, ok := infix.Left.(*ast.Integer); ok {
+				*accum = append(*accum, Op{OpCode: OF, IntParam: integer.Value})
+			} else if keyword, ok := infix.Left.(*ast.Keyword); ok {
+				switch keyword.Token.Type {
+				case lexer.ALL:
+					*accum = append(*accum, Op{OpCode: OF, IntParam: int64(len(c.patternsInRule(ruleName)))})
+				case lexer.ANY:
+					*accum = append(*accum, Op{OpCode: OF, IntParam: 1})
+				case lexer.NONE:
+					*accum = append(*accum, Op{OpCode: OF, IntParam: 0})
+				default:
+					return errors.New(fmt.Sprintf("invalid OF operation, left value must be a integer, 'all', or 'any'"))
+				}
+			} else {
+				return errors.New(fmt.Sprintf("invalid OF operation, left value must be a integer"))
+			}
+
+			return nil
 		}
 
-		compileCondition(ruleName, infix.Left, accum)
-		compileCondition(ruleName, infix.Right, accum)
+		c.compileCondition(ruleName, infix.Left, accum)
+		c.compileCondition(ruleName, infix.Right, accum)
 
 		switch infix.Token.Type {
 		case lexer.PLUS:
@@ -270,8 +320,18 @@ func compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
 		return nil
 	}
 
+	if set, ok := node.(*ast.Set); ok {
+		fmt.Println(len(set.Nodes))
+		for _, node := range set.Nodes {
+			c.compileCondition(ruleName, node, accum)
+		}
+
+		// finally push the number of nodes pushed onto the stack
+		*accum = append(*accum, Op{OpCode: PUSH, IntParam: int64(len(set.Nodes))})
+	}
+
 	if prefix, ok := node.(*ast.Prefix); ok {
-		compileCondition(ruleName, prefix.Right, accum)
+		c.compileCondition(ruleName, prefix.Right, accum)
 
 		switch prefix.Token.Type {
 		case lexer.MINUS:
@@ -290,7 +350,7 @@ func compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
 		}
 
 		name := fmt.Sprintf("%v_%v", ruleName, v.Value)
-		*accum = append(*accum, []Op{{OpCode: LOAD, VarParam: name}}...)
+		*accum = append(*accum, Op{OpCode: LOAD, VarParam: name})
 	}
 
 	if keyword, ok := node.(*ast.Keyword); ok {
@@ -303,7 +363,7 @@ func compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
 	}
 
 	if n, ok := node.(*ast.Integer); ok {
-		*accum = append(*accum, []Op{{OpCode: PUSH, IntParam: n.Value}}...)
+		*accum = append(*accum, Op{OpCode: PUSH, IntParam: n.Value})
 	}
 
 	return nil

@@ -25,6 +25,7 @@ const (
 	KEYWORD
 	BYTES
 	IMPORT
+	SET
 )
 
 // IsPrimitive returns true if the node is a primitive value like an
@@ -62,6 +63,29 @@ func IsModuleCall(node Node) bool {
 type Node interface {
 	Type() int
 	String() string
+}
+
+type Set struct {
+	Nodes []Node
+}
+
+func (s Set) String() string {
+	var builder strings.Builder
+
+	builder.WriteRune('(')
+	for i, node := range s.Nodes {
+		builder.WriteString(node.String())
+		if i < len(s.Nodes)-1 {
+			builder.WriteRune(',')
+		}
+	}
+	builder.WriteRune(')')
+
+	return builder.String()
+}
+
+func (s *Set) Type() int {
+	return SET
 }
 
 type Keyword struct {
@@ -330,9 +354,12 @@ func (a *Assignment) Type() int {
 	return ASSIGNMENT
 }
 
-func (a *Assignment) BytePattern() ([][]byte, bool, error) {
+// BytePattern returns a byte slice which represents the pattern to
+// search for, an offset for use if the pattern is partial and located
+// somewhere in the full pattern, a bool to say if this is case
+// insensitive or not, and an error.
+func (a *Assignment) BytePattern() ([]byte, int, bool, error) {
 
-	ret := make([][]byte, 0)
 	nocase := false
 
 	if str, ok := a.Right.(*String); ok {
@@ -344,11 +371,13 @@ func (a *Assignment) BytePattern() ([][]byte, bool, error) {
 		if _, ok := a.Attributes[lexer.ASCII]; ok {
 			if _, ok := a.Attributes[lexer.BASE64]; ok {
 				encoded := base64.StdEncoding.EncodeToString([]byte(str.Value))
-				ret = append(ret, []byte(encoded))
+				return []byte(encoded), 0, nocase, nil
 			} else {
-				ret = append(ret, []byte(str.Value))
+				return []byte(str.Value), 0, nocase, nil
 			}
-		} else if _, ok := a.Attributes[lexer.WIDE]; ok {
+		}
+
+		if _, ok := a.Attributes[lexer.WIDE]; ok {
 			uint16Slice := utf16.Encode([]rune(str.Value))
 			byteSlice := make([]byte, 0, len(uint16Slice)*2)
 
@@ -360,23 +389,23 @@ func (a *Assignment) BytePattern() ([][]byte, bool, error) {
 
 			if _, ok := a.Attributes[lexer.BASE64]; ok {
 				encoded := base64.StdEncoding.EncodeToString(byteSlice)
-				ret = append(ret, []byte(encoded))
+				return []byte(encoded), 0, nocase, nil
 			} else {
-				ret = append(ret, byteSlice)
+				return byteSlice, 0, nocase, nil
 			}
-		} else {
-			// default is ascii/utf8
-			ret = append(ret, []byte(str.Value))
 		}
+
+		// default is ascii/utf8
+		return []byte(str.Value), 0, nocase, nil
 	}
 
 	if _, ok := a.Right.(*Bytes); ok {
-		return nil, false, errors.New("byte patterns are not supported at this time")
+		return nil, 0, false, errors.New("byte patterns are not supported at this time")
 	}
 
 	if _, ok := a.Right.(*Regex); ok {
-		return nil, false, errors.New("Regex patterns are not supported at this time")
+		return nil, 0, false, errors.New("Regex patterns are not supported at this time")
 	}
 
-	return ret, nocase, nil
+	return nil, 0, false, errors.New("Unsupported pattern type")
 }

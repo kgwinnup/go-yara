@@ -1,8 +1,9 @@
 
-.PHONY: all
+.PHONY: all build
 
 test:
 	go test -v ./...
 
 build:
-	cd cmd && go build -o ../yarag main.go
+	mkdir -p build
+	cd cmd && go build -o ../build/yara main.go

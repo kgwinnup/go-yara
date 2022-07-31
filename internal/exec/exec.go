@@ -85,16 +85,18 @@ func (o Op) String() string {
 func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 
 	index := 0
+	var ret int64
 	stack := make([]int64, 0)
 	var right int64
 	var left int64
 
-	pop := func(stack []int64) (int64, []int64) {
-		return stack[0], stack[1:]
+	pop := func() int64 {
+		ret, stack = stack[0], stack[1:]
+		return ret
 	}
 
-	push := func(stack []int64, i int64) []int64 {
-		return append([]int64{i}, stack...)
+	push := func(i int64) {
+		stack = append([]int64{i}, stack...)
 	}
 
 	for {
@@ -108,151 +110,151 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 		switch cur.OpCode {
 		case LOAD:
 			if pattern, ok := mappings[cur.VarParam]; ok {
-				stack = push(stack, pattern.Count())
+				push(pattern.Count())
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case PUSH:
-			stack = push(stack, cur.IntParam)
+			push(cur.IntParam)
 
 		case BAND:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := right & left
-			stack = push(stack, ret)
+			push(ret)
 
 		case BOR:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := right | left
-			stack = push(stack, ret)
+			push(ret)
 
 		case BXOR:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := right ^ left
-			stack = push(stack, ret)
+			push(ret)
 
 		case AND:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left > 0 && right > 0 {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case OR:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left > 0 || right > 0 {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case EQUAL:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left == right {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case NOTEQUAL:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left != right {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case ADD:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := left + right
-			stack = push(stack, ret)
+			push(ret)
 
 		case MINUS:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := left - right
-			stack = push(stack, ret)
+			push(ret)
 
 		case MINUSU:
-			right, stack = pop(stack)
+			right = pop()
 
 			ret := -right
-			stack = push(stack, ret)
+			push(ret)
 
 		case GT:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left > right {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case GTE:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left >= right {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case LT:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left < right {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case LTE:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			if left <= right {
-				stack = push(stack, 1)
+				push(1)
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case SHIFTLEFT:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := left << right
-			stack = push(stack, ret)
+			push(ret)
 
 		case SHIFTRIGHT:
-			right, stack = pop(stack)
-			left, stack = pop(stack)
+			right = pop()
+			left = pop()
 
 			ret := left >> right
-			stack = push(stack, ret)
+			push(ret)
 
 		case AT:
-			right, stack = pop(stack)
+			right = pop()
 
 			if pattern, ok := mappings[cur.VarParam]; ok {
 				result := 0
@@ -262,17 +264,17 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 					}
 				}
 
-				stack = push(stack, int64(result))
+				push(int64(result))
 
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		case IN:
 			// high value in range
-			right, stack = pop(stack)
+			right = pop()
 			// low value in range
-			left, stack = pop(stack)
+			left = pop()
 
 			if pattern, ok := mappings[cur.VarParam]; ok {
 				result := 0
@@ -282,10 +284,10 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 					}
 				}
 
-				stack = push(stack, int64(result))
+				push(int64(result))
 
 			} else {
-				stack = push(stack, 0)
+				push(0)
 			}
 
 		default:

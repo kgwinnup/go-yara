@@ -8,7 +8,14 @@ I also created this project for fun :) Writing parsers and
 interpreters are fun, and I enjoy Golang development, even for
 parsers.
 
-<strong>This project is a working in progress</strong>
+<strong>This project is a work in progress</strong>
+
+- [x] lexer and parser
+- [x] operations/condition evaluation (pre Yara 4.2)
+- [x] standard string pattern types
+- [ ] regex pattern types
+- [ ] bytes pattern types
+- [ ] Yara 4.2+ evaluation support
 
 # Differences with C Yara
 
@@ -21,20 +28,4 @@ where there is some divergence.
    that are multi-byte, they will be matched correctly. As a result of
    this, the "wide" keyword now converts the UTF8 string into
    UTF16LE.
-
-# Currently supported functionality
-
-What is not supported right now?
-
-1. No byte patterns. E.g. `$b1 = { FF FF FF ?? ... }`
-2. No regex. E.g. `$r1 = /.../`
-
-What is supported?
-
-1. Most of regular strings and the operations/conditions for matching
-   on them do work. 
-2. Full UTF8 strings, so unicode is supported by default. "wide"
-   keyword converts UTF8 to UTF16Le
-
-
 

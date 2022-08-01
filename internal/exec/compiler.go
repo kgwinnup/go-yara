@@ -405,8 +405,13 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				push(Op{OpCode: LOADOFFSET, VarParam: c.tempVar})
 			}
 		} else {
-			name := fmt.Sprintf("%v_%v", ruleName, v.Value)
-			push(Op{OpCode: LOADCOUNT, VarParam: name})
+			if len(v.Value) > 1 {
+				name := fmt.Sprintf("%v_%v", ruleName, v.Value)
+				push(Op{OpCode: LOADCOUNT, VarParam: name})
+			} else {
+				push(Op{OpCode: PUSH, IntParam: 0})
+				push(Op{OpCode: LOADCOUNT, VarParam: c.tempVar})
+			}
 		}
 	}
 

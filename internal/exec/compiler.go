@@ -11,7 +11,7 @@ import (
 	"github.com/kgwinnup/go-yara/internal/parser"
 )
 
-type Rule struct {
+type CompiledRule struct {
 	instr    []Op
 	deps     []string
 	finished bool
@@ -19,14 +19,19 @@ type Rule struct {
 	name     string
 }
 
+type ScanOutput struct {
+	Name string
+	Tags []string
+}
+
 type CompiledRules struct {
-	rules []*Rule
+	rules []*CompiledRule
 	// stores a Pattern object by its RuleName_Var key
 	// this is used when evaluating the condition. Each pattern
 	// contains information about the indexes within the input bytes
 	mappings       map[string]Pattern
-	automata       []*Node
-	automataNocase []*Node
+	automata       []*ACNode
+	automataNocase []*ACNode
 }
 
 func (c *CompiledRules) Debug() {
@@ -50,11 +55,6 @@ func (c *CompiledRules) Debug() {
 	}
 }
 
-type ScanOutput struct {
-	Name string
-	Tags []string
-}
-
 func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 
 	nodeId := 0
@@ -62,20 +62,17 @@ func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 
 	output := make([]*ScanOutput, 0)
 
-	c.mappings["filesize"] = &ConstantPattern{
-		name: "filesize",
-		size: len(input),
-	}
+	c.mappings["filesize"] = NewConstantPattern("filesize", len(input))
 
 	for i, b := range input {
 		// get the next node in the automata and return a list of
 		// matches indexed the same as the patterns slice
-		nodeId = next(c.automata, nodeId, b, i)
-		nodeIdNocase = next(c.automataNocase, nodeIdNocase, toLower(b), i)
+		nodeId = ACNext(c.automata, nodeId, b, i)
+		nodeIdNocase = ACNext(c.automataNocase, nodeIdNocase, toLower(b), i)
 	}
 
 	for _, rule := range c.rules {
-		out, err := eval(rule, c.mappings)
+		out, err := Eval(rule, c.mappings)
 		if err != nil {
 			return nil, err
 		}
@@ -88,10 +85,7 @@ func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 
 			// add this rule to the global state for other rules to
 			// reference
-			c.mappings[rule.name] = &ConstantPattern{
-				name: rule.name,
-				size: int(out),
-			}
+			c.mappings[rule.name] = NewConstantPattern(rule.name, int(out))
 		}
 	}
 
@@ -130,17 +124,12 @@ func toLower(b byte) byte {
 	return b
 }
 
-type SubPattern struct {
-	Pattern []byte
-	Offset  int
-}
-
 // compile is the internal compile function for iterating over all the
 // parsed rules and creating the automaton and other structures
 func compile(rules []*ast.Rule) (*CompiledRules, error) {
 
 	compiled := &CompiledRules{
-		rules:    make([]*Rule, 0),
+		rules:    make([]*CompiledRule, 0),
 		mappings: make(map[string]Pattern),
 	}
 
@@ -149,7 +138,7 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 	dups := make(map[string]Pattern)
 
 	for _, rule := range rules {
-		compiledRule := &Rule{
+		compiledRule := &CompiledRule{
 			instr:    make([]Op, 0),
 			deps:     make([]string, 0),
 			finished: false,
@@ -166,14 +155,15 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 					return nil, err
 				}
 
+				if nocase {
+					for i := 0; i < len(patternSlice); i++ {
+						patternSlice[i] = toLower(patternSlice[i])
+					}
+				}
+
 				hash := fmt.Sprintf("%x", sha256.Sum256([]byte(assign.Right.String())))
 
-				temp := &StringPattern{
-					name:    fmt.Sprintf("%v_%v", rule.Name, assign.Left),
-					nocase:  nocase,
-					pattern: patternSlice,
-					rule:    rule.Name,
-				}
+				temp := NewStringPattern(assign.Left, rule.Name, nocase, patternSlice)
 
 				// check if the pattern is identical to another existing pattern. If
 				// so add a pointer with this patterns name to point to the existing
@@ -181,21 +171,17 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 				// automaton.
 				pattern, ok := dups[hash]
 				if ok {
-					compiled.mappings[temp.name] = pattern
+					compiled.mappings[temp.Name()] = pattern
 				} else {
 					dups[hash] = temp
 
 					if temp.nocase {
-						for i := 0; i < len(temp.pattern); i++ {
-							temp.pattern[i] = toLower(temp.pattern[i])
-						}
-
 						patternsNocase = append(patternsNocase, temp)
 					} else {
 						patterns = append(patterns, temp)
 					}
 
-					compiled.mappings[temp.name] = temp
+					compiled.mappings[temp.Name()] = temp
 				}
 			}
 		}
@@ -213,8 +199,8 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 	}
 
 	// build the automta
-	compiled.automata = build(patterns)
-	compiled.automataNocase = build(patternsNocase)
+	compiled.automata = ACBuild(patterns)
+	compiled.automataNocase = ACBuild(patternsNocase)
 
 	return compiled, nil
 }

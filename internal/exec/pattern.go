@@ -1,5 +1,7 @@
 package exec
 
+import "fmt"
+
 type Pattern interface {
 	// Check will take as input the slice of bytes to scan, and a list
 	// of possible indexes where the scanning can begin.
@@ -35,6 +37,13 @@ type Pattern interface {
 type ConstantPattern struct {
 	name string
 	size int
+}
+
+func NewConstantPattern(name string, size int) *ConstantPattern {
+	return &ConstantPattern{
+		name: name,
+		size: size,
+	}
 }
 
 func (c *ConstantPattern) Check(input []byte, indexes []int) int {
@@ -78,6 +87,15 @@ type StringPattern struct {
 	indexes []int
 	size    int
 	count   int
+}
+
+func NewStringPattern(varName, ruleName string, nocase bool, pattern []byte) *StringPattern {
+	return &StringPattern{
+		name:    fmt.Sprintf("%v_%v", ruleName, varName),
+		pattern: pattern,
+		rule:    ruleName,
+		nocase:  nocase,
+	}
 }
 
 // Check for string patterns is just the count of indexes found. This

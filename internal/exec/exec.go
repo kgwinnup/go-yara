@@ -88,7 +88,7 @@ func (o Op) String() string {
 	}
 }
 
-func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
+func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 
 	index := 0
 	var ret int64

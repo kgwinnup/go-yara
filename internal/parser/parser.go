@@ -395,6 +395,10 @@ func (p *Parser) parseFor() (ast.Node, error) {
 			return nil, err
 		}
 
+		if prefix, ok := set.(*ast.Prefix); ok {
+			set = prefix.Right
+		}
+
 		_, err = p.expectRead(lexer.COLON, "expecting colon")
 		if err != nil {
 			return nil, err

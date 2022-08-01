@@ -30,10 +30,12 @@ const (
 	IN
 	OF
 	MOVR
+	ADDR
 	INCR
 	DECR
 	PUSHR
 	LOOP
+	CLEAR
 )
 
 type Op struct {
@@ -90,6 +92,8 @@ func (o Op) String() string {
 		return fmt.Sprintf("OF %v", o.IntParam)
 	case MOVR:
 		return fmt.Sprintf("MOVR %v", o.IntParam)
+	case ADDR:
+		return fmt.Sprintf("ADDR %v", o.IntParam)
 	case INCR:
 		return fmt.Sprintf("INCR %v", o.IntParam)
 	case DECR:
@@ -98,6 +102,8 @@ func (o Op) String() string {
 		return fmt.Sprintf("PUSHR %v", o.IntParam)
 	case LOOP:
 		return fmt.Sprintf("LOOP %v", o.IntParam)
+	case CLEAR:
+		return fmt.Sprintf("CLEAR")
 	default:
 		return "WAT"
 	}
@@ -141,6 +147,10 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 			left = pop()
 			regs[cur.IntParam] = left
 
+		case ADDR:
+			left = pop()
+			regs[cur.IntParam] += left
+
 		case INCR:
 			regs[cur.IntParam]++
 
@@ -152,8 +162,14 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 
 		case LOOP:
 			if regs[RC] > 0 {
-				index = int(cur.IntParam)
+				index = int(cur.IntParam) - 1
+				regs[RC]--
 			}
+
+		case CLEAR:
+			regs[0] = 0
+			regs[1] = 0
+			regs[2] = 0
 
 		case LOADCOUNT:
 			if pattern, ok := mappings[cur.VarParam]; ok {

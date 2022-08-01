@@ -32,6 +32,10 @@ type CompiledRules struct {
 	mappings       map[string]Pattern
 	automata       []*ACNode
 	automataNocase []*ACNode
+
+	// this is to hold variable names to register value. Hacky, i
+	// know.
+	tempVars map[string]int64
 }
 
 func (c *CompiledRules) Debug() {
@@ -112,6 +116,7 @@ func Compile(input string) (*CompiledRules, error) {
 	compiled := &CompiledRules{
 		rules:    make([]*CompiledRule, 0),
 		mappings: make(map[string]Pattern),
+		tempVars: make(map[string]int64),
 	}
 
 	patterns := make([]Pattern, 0)
@@ -265,7 +270,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			if v, ok := infix.Left.(*ast.Variable); ok {
 				c.compileNode(ruleName, infix.Right, accum)
 
-				name := strings.Replace(v.Value, "@", "$", 1)
+				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
 				*accum = append(*accum, Op{OpCode: LOADOFFSET, VarParam: name})
 
 				return nil
@@ -364,8 +369,9 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 
 		} else if strings.HasPrefix(v.Value, "@") {
 			v.Value = strings.Replace(v.Value, "@", "$", 1)
+			name := fmt.Sprintf("%v_%v", ruleName, v.Value)
 			*accum = append(*accum, Op{OpCode: PUSH, IntParam: 0})
-			*accum = append(*accum, Op{OpCode: LOADOFFSET, VarParam: v.Value})
+			*accum = append(*accum, Op{OpCode: LOADOFFSET, VarParam: name})
 		} else {
 			name := fmt.Sprintf("%v_%v", ruleName, v.Value)
 			*accum = append(*accum, Op{OpCode: LOADCOUNT, VarParam: name})
@@ -383,6 +389,41 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 
 	if n, ok := node.(*ast.Integer); ok {
 		*accum = append(*accum, Op{OpCode: PUSH, IntParam: n.Value})
+	}
+
+	if ident, ok := node.(*ast.Identity); ok {
+		if n, ok := c.tempVars[ident.Value]; ok {
+			*accum = append(*accum, Op{OpCode: PUSHR, IntParam: n})
+		} else {
+			return errors.New("invalid variable to create instruction")
+		}
+	}
+
+	if loop, ok := node.(*ast.For); ok {
+		*accum = append(*accum, Op{OpCode: CLEAR})
+
+		// for _ loop.Var in (X..Y) : _
+		if infix, ok := loop.StringSet.(*ast.Infix); ok && infix.Token.Type == lexer.RANGE && loop.Var != "" {
+			// set loop.Var
+			c.compileNode(ruleName, infix.Left, accum)
+			*accum = append(*accum, Op{OpCode: MOVR, IntParam: R1})
+			c.tempVars[loop.Var] = R1
+
+			// get the accumulator counter, loop checks this register
+			c.compileNode(ruleName, infix.Right, accum)
+			c.compileNode(ruleName, infix.Left, accum)
+			*accum = append(*accum, Op{OpCode: MINUS})
+			*accum = append(*accum, Op{OpCode: MOVR, IntParam: RC})
+		}
+		startAddress := int64(len(*accum))
+
+		// do body
+		c.compileNode(ruleName, loop.Body, accum)
+
+		*accum = append(*accum, Op{OpCode: ADDR, IntParam: R2})
+		*accum = append(*accum, Op{OpCode: LOOP, IntParam: startAddress})
+		*accum = append(*accum, Op{OpCode: PUSHR, IntParam: R2})
+
 	}
 
 	return nil

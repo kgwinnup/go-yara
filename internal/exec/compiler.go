@@ -407,6 +407,10 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			// set loop.Var
 			c.compileNode(ruleName, infix.Left, accum)
 			*accum = append(*accum, Op{OpCode: MOVR, IntParam: R1})
+
+			// save a total size for the ALL matching posibility
+			c.compileNode(ruleName, infix.Left, accum)
+			*accum = append(*accum, Op{OpCode: MOVR, IntParam: R3})
 			c.tempVars[loop.Var] = R1
 
 			// get the accumulator counter, loop checks this register
@@ -414,15 +418,40 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			c.compileNode(ruleName, infix.Left, accum)
 			*accum = append(*accum, Op{OpCode: MINUS})
 			*accum = append(*accum, Op{OpCode: MOVR, IntParam: RC})
+		} else if _, ok := loop.StringSet.(*ast.Set); ok {
+			return errors.New("set loop structure not implemented")
+		} else {
+			return errors.New("invalid loop structure")
 		}
 		startAddress := int64(len(*accum))
 
 		// do body
 		c.compileNode(ruleName, loop.Body, accum)
 
+		*accum = append(*accum, Op{OpCode: INCR, IntParam: R1})
 		*accum = append(*accum, Op{OpCode: ADDR, IntParam: R2})
 		*accum = append(*accum, Op{OpCode: LOOP, IntParam: startAddress})
 		*accum = append(*accum, Op{OpCode: PUSHR, IntParam: R2})
+
+		// now wrap up and finish the condition
+		if integer, ok := loop.Expr.(*ast.Integer); ok {
+			fmt.Println(integer.Value)
+			*accum = append(*accum, Op{OpCode: PUSH, IntParam: integer.Value})
+			*accum = append(*accum, Op{OpCode: EQUAL})
+		} else if keyword, ok := loop.Expr.(*ast.Keyword); ok {
+			switch keyword.Token.Type {
+			case lexer.ALL:
+				*accum = append(*accum, Op{OpCode: PUSHR, IntParam: R3})
+				*accum = append(*accum, Op{OpCode: EQUAL})
+			case lexer.ANY:
+				*accum = append(*accum, Op{OpCode: PUSH, IntParam: 1})
+				*accum = append(*accum, Op{OpCode: GTE})
+			default:
+				return errors.New(fmt.Sprintf("invalid loop expression: '%v'", loop.Expr))
+			}
+		} else {
+			return errors.New(fmt.Sprintf("invalid loop expression: '%v'", loop.Expr))
+		}
 
 	}
 

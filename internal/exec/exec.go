@@ -113,6 +113,7 @@ const (
 	RC = iota
 	R1
 	R2
+	R3
 )
 
 func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
@@ -132,7 +133,7 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 		stack = append([]int64{i}, stack...)
 	}
 
-	regs := []int64{0, 0, 0}
+	regs := []int64{0, 0, 0, 0}
 
 	for {
 
@@ -170,6 +171,7 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 			regs[0] = 0
 			regs[1] = 0
 			regs[2] = 0
+			regs[3] = 0
 
 		case LOADCOUNT:
 			if pattern, ok := mappings[cur.VarParam]; ok {
@@ -182,7 +184,7 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 			index := pop()
 
 			if pattern, ok := mappings[cur.VarParam]; ok {
-				if int(cur.IntParam) < len(pattern.Indexes()) {
+				if int(index) < len(pattern.Indexes()) {
 					push(int64(pattern.Indexes()[index]))
 				} else {
 					push(0)

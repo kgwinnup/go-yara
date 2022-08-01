@@ -67,7 +67,7 @@ type Node interface {
 }
 
 type For struct {
-	Expr      Node
+	Expr      *lexer.Token
 	StringSet Node
 	Var       string
 	Body      Node
@@ -75,9 +75,9 @@ type For struct {
 
 func (f For) String() string {
 	if f.Var == "" {
-		return fmt.Sprintf("for %v of %v : (%v)", f.Expr, f.StringSet, f.Body)
+		return fmt.Sprintf("for %v of %v : (%v)", f.Expr.Raw, f.StringSet, f.Body)
 	}
-	return fmt.Sprintf("for %v %v in %v : (%v)", f.Expr, f.Var, f.StringSet, f.Body)
+	return fmt.Sprintf("for %v %v in %v : (%v)", f.Expr.Raw, f.Var, f.StringSet, f.Body)
 }
 
 func (f For) Type() int {

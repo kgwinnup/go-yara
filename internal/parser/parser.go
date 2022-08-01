@@ -372,10 +372,13 @@ func (p *Parser) parseFor() (ast.Node, error) {
 		return nil, err
 	}
 
-	expr, _ := p.parseExpr(0)
+	expr, err := p.lexer.Next()
+	if err != nil {
+		return nil, err
+	}
 
-	switch expr.Type() {
-	case ast.INTEGER, ast.KEYWORD:
+	switch expr.Type {
+	case lexer.INTEGER, lexer.ANY, lexer.ALL:
 	default:
 		return nil, errors.New(fmt.Sprintf("for expression expects 'any' or 'all' keywords, got '%v'", expr))
 	}

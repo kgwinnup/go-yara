@@ -207,7 +207,7 @@ func TestForRange(t *testing.T) {
         $b = "dummy2"
 
     condition:
-        for all i in (0..3) : ( @a[i] + 10 == @b[i] )
+        for any i in (0..3) : ( @a[i] + 10 == @b[i] )
 }`
 
 	input := "dummy1    dummy2"

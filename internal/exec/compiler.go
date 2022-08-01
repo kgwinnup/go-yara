@@ -107,27 +107,6 @@ func Compile(input string) (*CompiledRules, error) {
 		}
 	}
 
-	compiled, err := compile(rules)
-	if err != nil {
-		return nil, err
-	}
-
-	return compiled, nil
-
-}
-
-func toLower(b byte) byte {
-	if b >= 0x41 && b <= 0x5a {
-		return b | 0x20
-	}
-
-	return b
-}
-
-// compile is the internal compile function for iterating over all the
-// parsed rules and creating the automaton and other structures
-func compile(rules []*ast.Rule) (*CompiledRules, error) {
-
 	compiled := &CompiledRules{
 		rules:    make([]*CompiledRule, 0),
 		mappings: make(map[string]Pattern),
@@ -203,6 +182,14 @@ func compile(rules []*ast.Rule) (*CompiledRules, error) {
 	compiled.automataNocase = ACBuild(patternsNocase)
 
 	return compiled, nil
+}
+
+func toLower(b byte) byte {
+	if b >= 0x41 && b <= 0x5a {
+		return b | 0x20
+	}
+
+	return b
 }
 
 func (c *CompiledRules) patternsInRule(ruleName string) []string {

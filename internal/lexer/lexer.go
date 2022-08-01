@@ -95,6 +95,8 @@ const (
 	IN
 	NOT
 	DEFINED
+	KB
+	MB
 )
 
 var keywords = map[string]int{
@@ -147,6 +149,8 @@ var keywords = map[string]int{
 	"strings":     STRINGS,
 	"condition":   CONDITION,
 	"meta":        META,
+	"KB":          KB,
+	"MB":          MB,
 }
 
 type Token struct {

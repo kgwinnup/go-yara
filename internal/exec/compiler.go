@@ -231,11 +231,14 @@ func (c *CompiledRules) patternsInRule(ruleName string) []string {
 	return patterns
 }
 
+// compileCondition is the function responsible for building the
+// instruction sequence for evaluation.
 func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
 
 	if infix, ok := node.(*ast.Infix); ok {
 
-		// some infix operations do not require pushing the variable as a single instruction
+		// some infix operations do not require pushing the left value
+		// as a single instruction. Intercept here and process accordingly.
 		switch infix.Token.Type {
 		case lexer.IN:
 			c.compileCondition(ruleName, infix.Right, accum)
@@ -253,7 +256,7 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 				names := c.patternsInRule(ruleName)
 				for _, name := range names {
-					*accum = append(*accum, Op{OpCode: LOAD, VarParam: name})
+					*accum = append(*accum, Op{OpCode: LOADCOUNT, VarParam: name})
 				}
 			} else {
 				c.compileCondition(ruleName, infix.Right, accum)
@@ -277,11 +280,27 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 			}
 
 			return nil
+
+		case lexer.LBRACKET:
+			if v, ok := infix.Left.(*ast.Variable); ok {
+				c.compileCondition(ruleName, infix.Right, accum)
+
+				name := strings.Replace(v.Value, "@", "$", 1)
+				*accum = append(*accum, Op{OpCode: LOADOFFSET, VarParam: name})
+
+				return nil
+
+			} else {
+				return errors.New(fmt.Sprintf("invalid index operation, left value must be a variable"))
+			}
+
 		}
 
+		// recurse the left and right branches and push those instructions onto the sequence.
 		c.compileCondition(ruleName, infix.Left, accum)
 		c.compileCondition(ruleName, infix.Right, accum)
 
+		// handle the infix operation now that the left and right values are processed.
 		switch infix.Token.Type {
 		case lexer.PLUS:
 			*accum = append(*accum, Op{OpCode: ADD})
@@ -321,7 +340,6 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 	}
 
 	if set, ok := node.(*ast.Set); ok {
-		fmt.Println(len(set.Nodes))
 		for _, node := range set.Nodes {
 			c.compileCondition(ruleName, node, accum)
 		}
@@ -349,14 +367,35 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 			v.Value = strings.Replace(v.Value, "#", "$", 1)
 		}
 
-		name := fmt.Sprintf("%v_%v", ruleName, v.Value)
-		*accum = append(*accum, Op{OpCode: LOAD, VarParam: name})
+		// this needs to be expanded into a set of matching rule names
+		if strings.HasSuffix(v.Value, "*") {
+			prefix := fmt.Sprintf("%v_%v", ruleName, strings.TrimSuffix(v.Value, "*"))
+
+			count := 0
+			for _, name := range c.patternsInRule(ruleName) {
+				if strings.HasPrefix(name, prefix) {
+					count++
+					*accum = append(*accum, Op{OpCode: LOADCOUNT, VarParam: name})
+				}
+			}
+
+			// finally push the number of nodes pushed onto the stack
+			*accum = append(*accum, Op{OpCode: PUSH, IntParam: int64(count)})
+
+		} else if strings.HasPrefix(v.Value, "@") {
+			v.Value = strings.Replace(v.Value, "@", "$", 1)
+			*accum = append(*accum, Op{OpCode: PUSH, IntParam: 0})
+			*accum = append(*accum, Op{OpCode: LOADOFFSET, VarParam: v.Value})
+		} else {
+			name := fmt.Sprintf("%v_%v", ruleName, v.Value)
+			*accum = append(*accum, Op{OpCode: LOADCOUNT, VarParam: name})
+		}
 	}
 
 	if keyword, ok := node.(*ast.Keyword); ok {
 		switch keyword.Token.Type {
 		case lexer.FILESIZE:
-			*accum = append(*accum, []Op{{OpCode: LOAD, VarParam: keyword.Value}}...)
+			*accum = append(*accum, Op{OpCode: LOADCOUNT, VarParam: keyword.Value})
 		default:
 			return errors.New(fmt.Sprintf("invalid keyword: %v", keyword.Value))
 		}

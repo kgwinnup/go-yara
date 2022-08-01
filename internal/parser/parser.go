@@ -510,9 +510,22 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 		case lexer.VARIABLE:
 			tok, _ := p.lexer.Next()
-			left = &ast.Variable{
-				Token: tok,
-				Value: tok.Raw,
+			tok2, _ := p.lexer.Peek()
+
+			if tok2.Type == lexer.ASTERISK {
+				p.lexer.Next()
+
+				left = &ast.Variable{
+					Token: tok,
+					Value: tok.Raw + "*",
+				}
+
+			} else {
+
+				left = &ast.Variable{
+					Token: tok,
+					Value: tok.Raw,
+				}
 			}
 
 		case lexer.IDENTITY:
@@ -527,6 +540,17 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 		default:
 			return nil, errors.New(fmt.Sprintf("invalid expression at: '%v'", tok.Raw))
+		}
+	}
+
+	if integer, ok := left.(*ast.Integer); ok {
+		tok, _ := p.lexer.Peek()
+		if tok.Type == lexer.KB {
+			p.lexer.Next()
+			integer.Value = integer.Value * 1024
+		} else if tok.Type == lexer.MB {
+			p.lexer.Next()
+			integer.Value = integer.Value * (2 ^ 20)
 		}
 	}
 

@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	LOAD = iota
+	LOADCOUNT = iota
+	LOADOFFSET
 	PUSH
 	EXCEPT
 	AND
@@ -38,8 +39,10 @@ type Op struct {
 
 func (o Op) String() string {
 	switch o.OpCode {
-	case LOAD:
+	case LOADCOUNT:
 		return fmt.Sprintf("LOAD %v", o.VarParam)
+	case LOADOFFSET:
+		return fmt.Sprintf("LOADOFFSET %v", o.VarParam)
 	case PUSH:
 		return fmt.Sprintf("PUSH %v", o.IntParam)
 	case AND:
@@ -111,9 +114,22 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 		cur := rule.instr[index]
 
 		switch cur.OpCode {
-		case LOAD:
+		case LOADCOUNT:
 			if pattern, ok := mappings[cur.VarParam]; ok {
 				push(pattern.Count())
+			} else {
+				push(0)
+			}
+
+		case LOADOFFSET:
+			index := pop()
+
+			if pattern, ok := mappings[cur.VarParam]; ok {
+				if int(cur.IntParam) < len(pattern.Indexes()) {
+					push(int64(pattern.Indexes()[index]))
+				} else {
+					push(0)
+				}
 			} else {
 				push(0)
 			}

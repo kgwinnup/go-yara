@@ -94,7 +94,7 @@ type Keyword struct {
 	Attribute Node
 }
 
-func (k *Keyword) String() string {
+func (k Keyword) String() string {
 	if k.Attribute != nil {
 		return fmt.Sprintf("%v(%v)", k.Value, k.Attribute)
 	}
@@ -111,7 +111,7 @@ type Bytes struct {
 	Items []string
 }
 
-func (b *Bytes) String() string {
+func (b Bytes) String() string {
 	var builder strings.Builder
 	builder.WriteRune('{')
 	builder.WriteRune(' ')
@@ -134,7 +134,7 @@ type Identity struct {
 	Value string
 }
 
-func (i *Identity) String() string {
+func (i Identity) String() string {
 	return i.Value
 }
 
@@ -147,7 +147,7 @@ type Variable struct {
 	Value string
 }
 
-func (v *Variable) String() string {
+func (v Variable) String() string {
 	return v.Value
 }
 
@@ -165,7 +165,7 @@ type Rule struct {
 	Meta      []Node
 }
 
-func (r *Rule) String() string {
+func (r Rule) String() string {
 	var builder strings.Builder
 
 	if r.Private {
@@ -231,7 +231,7 @@ type Prefix struct {
 	Right Node
 }
 
-func (p *Prefix) String() string {
+func (p Prefix) String() string {
 	if p.Token.Type == lexer.LPAREN {
 		return fmt.Sprintf("(%v)", p.Right)
 	}
@@ -253,7 +253,7 @@ type Infix struct {
 	Right Node
 }
 
-func (i *Infix) String() string {
+func (i Infix) String() string {
 
 	if i.Token.Type == lexer.LBRACKET {
 		return fmt.Sprintf("%v[%v]", i.Left, i.Right)
@@ -275,7 +275,7 @@ type String struct {
 	Value string
 }
 
-func (s *String) String() string {
+func (s String) String() string {
 	return fmt.Sprintf("\"%v\"", s.Value)
 }
 
@@ -288,7 +288,7 @@ type Regex struct {
 	Value string
 }
 
-func (r *Regex) String() string {
+func (r Regex) String() string {
 	return fmt.Sprintf("/%v/", r.Value)
 }
 
@@ -301,7 +301,7 @@ type Bool struct {
 	Value bool
 }
 
-func (b *Bool) String() string {
+func (b Bool) String() string {
 	return fmt.Sprintf("%v", b.Value)
 }
 
@@ -314,7 +314,7 @@ type Integer struct {
 	Value int64
 }
 
-func (i *Integer) String() string {
+func (i Integer) String() string {
 	return fmt.Sprintf("%v", i.Token.Raw)
 }
 
@@ -327,7 +327,7 @@ type Import struct {
 	Value string
 }
 
-func (i *Import) String() string {
+func (i Import) String() string {
 	return fmt.Sprintf("import \"%v\"", i.Value)
 }
 
@@ -341,7 +341,7 @@ type Assignment struct {
 	Attributes map[int]Node
 }
 
-func (a *Assignment) String() string {
+func (a Assignment) String() string {
 	attrs := ""
 	for _, attr := range a.Attributes {
 		attrs += fmt.Sprintf("%v ", attr)

@@ -21,8 +21,9 @@ type CompiledRule struct {
 }
 
 type ScanOutput struct {
-	Name string
-	Tags []string
+	Name    string
+	Tags    []string
+	Strings []string
 }
 
 type CompiledRules struct {
@@ -61,7 +62,7 @@ func (c *CompiledRules) Debug() {
 	}
 }
 
-func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
+func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 
 	nodeId := 0
 	nodeIdNocase := 0
@@ -84,9 +85,23 @@ func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 		}
 
 		if out > 0 {
+
+			strs := make([]string, 0)
+
+			if s {
+				for _, pattern := range c.mappings {
+					if pattern.Rule() == rule.name && len(pattern.Indexes()) > 0 {
+						for _, index := range pattern.Indexes() {
+							strs = append(strs, fmt.Sprintf("0x%x:%v", index, strings.Split(pattern.Name(), "_")[1]))
+						}
+					}
+				}
+			}
+
 			output = append(output, &ScanOutput{
-				Name: rule.name,
-				Tags: rule.tags,
+				Name:    rule.name,
+				Tags:    rule.tags,
+				Strings: strs,
 			})
 
 			// add this rule to the global state for other rules to

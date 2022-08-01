@@ -467,19 +467,29 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		} else if set, ok := loop.StringSet.(*ast.Set); ok {
 			names := c.setToStringSlice(ruleName, set)
 
+			push(Op{OpCode: PUSH, IntParam: int64(len(names))})
+			push(Op{OpCode: MOVR, IntParam: R3})
+
 			for _, name := range names {
 				c.tempVar = name
 				c.compileNode(ruleName, loop.Body, accum)
 				push(Op{OpCode: ADDR, IntParam: R2})
 			}
+
 			push(Op{OpCode: PUSHR, IntParam: R2})
 
 		} else if keyword, ok := loop.StringSet.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
-			for name := range c.mappings {
+
+			push(Op{OpCode: PUSH, IntParam: int64(len(c.patternsInRule(ruleName)))})
+			push(Op{OpCode: MOVR, IntParam: R3})
+
+			for _, name := range c.patternsInRule(ruleName) {
+
 				c.tempVar = name
 				c.compileNode(ruleName, loop.Body, accum)
 				push(Op{OpCode: ADDR, IntParam: R2})
 			}
+
 			push(Op{OpCode: PUSHR, IntParam: R2})
 
 		} else {

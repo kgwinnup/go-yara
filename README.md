@@ -15,11 +15,11 @@ parsers.
 <strong>This project is a work in progress</strong>
 
 - [x] lexer and parser
-- [x] operations/condition evaluation (pre Yara 4.2)
+- [x] operations/condition evaluation
+- [o] some but not all iterators
 - [x] standard string pattern types
 - [ ] regex pattern types
 - [ ] bytes pattern types
-- [ ] Yara 4.2+ evaluation support
 - [ ] modules 
 
 # Differences with C Yara

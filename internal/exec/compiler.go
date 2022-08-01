@@ -242,6 +242,7 @@ func (c *CompiledRules) setToStringSlice(ruleName string, set *ast.Set) []string
 
 // compileNode is the function responsible for building the
 // instruction sequence for evaluation.
+// in general, I am unhappy with this function, super messy.
 func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op) error {
 
 	push := func(op Op) {
@@ -439,8 +440,6 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 	if loop, ok := node.(*ast.For); ok {
 		push(Op{OpCode: CLEAR})
 
-		var startAddress int64
-
 		// for _ loop.Var in (X..Y) : _
 		if infix, ok := loop.StringSet.(*ast.Infix); ok && infix.Token.Type == lexer.RANGE && loop.Var != "" {
 			// set loop.Var
@@ -458,7 +457,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			push(Op{OpCode: MINUS})
 			push(Op{OpCode: MOVR, IntParam: RC})
 
-			startAddress = int64(len(*accum))
+			startAddress := int64(len(*accum))
 
 			// do body
 			c.compileNode(ruleName, loop.Body, accum)

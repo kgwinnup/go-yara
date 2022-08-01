@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	LOAD = iota
+	LOADCOUNT = iota
+	LOADOFFSET
 	PUSH
 	EXCEPT
 	AND
@@ -28,6 +29,13 @@ const (
 	AT
 	IN
 	OF
+	MOVR
+	ADDR
+	INCR
+	DECR
+	PUSHR
+	LOOP
+	CLEAR
 )
 
 type Op struct {
@@ -38,8 +46,10 @@ type Op struct {
 
 func (o Op) String() string {
 	switch o.OpCode {
-	case LOAD:
-		return fmt.Sprintf("LOAD %v", o.VarParam)
+	case LOADCOUNT:
+		return fmt.Sprintf("LOADCOUNT %v", o.VarParam)
+	case LOADOFFSET:
+		return fmt.Sprintf("LOADOFFSET %v", o.VarParam)
 	case PUSH:
 		return fmt.Sprintf("PUSH %v", o.IntParam)
 	case AND:
@@ -80,12 +90,33 @@ func (o Op) String() string {
 		return fmt.Sprintf("IN %v", o.VarParam)
 	case OF:
 		return fmt.Sprintf("OF %v", o.IntParam)
+	case MOVR:
+		return fmt.Sprintf("MOVR %v", o.IntParam)
+	case ADDR:
+		return fmt.Sprintf("ADDR %v", o.IntParam)
+	case INCR:
+		return fmt.Sprintf("INCR %v", o.IntParam)
+	case DECR:
+		return fmt.Sprintf("DECR %v", o.IntParam)
+	case PUSHR:
+		return fmt.Sprintf("PUSHR %v", o.IntParam)
+	case LOOP:
+		return fmt.Sprintf("LOOP %v", o.IntParam)
+	case CLEAR:
+		return fmt.Sprintf("CLEAR")
 	default:
 		return "WAT"
 	}
 }
 
-func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
+const (
+	RC = iota
+	R1
+	R2
+	R3
+)
+
+func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 
 	index := 0
 	var ret int64
@@ -102,6 +133,8 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 		stack = append([]int64{i}, stack...)
 	}
 
+	regs := []int64{0, 0, 0, 0}
+
 	for {
 
 		if index >= len(rule.instr) {
@@ -111,9 +144,51 @@ func eval(rule *Rule, mappings map[string]Pattern) (int64, error) {
 		cur := rule.instr[index]
 
 		switch cur.OpCode {
-		case LOAD:
+		case MOVR:
+			left = pop()
+			regs[cur.IntParam] = left
+
+		case ADDR:
+			left = pop()
+			regs[cur.IntParam] += left
+
+		case INCR:
+			regs[cur.IntParam]++
+
+		case DECR:
+			regs[cur.IntParam]--
+
+		case PUSHR:
+			push(regs[cur.IntParam])
+
+		case LOOP:
+			if regs[RC] > 0 {
+				index = int(cur.IntParam) - 1
+				regs[RC]--
+			}
+
+		case CLEAR:
+			regs[0] = 0
+			regs[1] = 0
+			regs[2] = 0
+			regs[3] = 0
+
+		case LOADCOUNT:
 			if pattern, ok := mappings[cur.VarParam]; ok {
 				push(pattern.Count())
+			} else {
+				push(0)
+			}
+
+		case LOADOFFSET:
+			index := pop()
+
+			if pattern, ok := mappings[cur.VarParam]; ok {
+				if int(index) < len(pattern.Indexes()) {
+					push(int64(pattern.Indexes()[index]))
+				} else {
+					push(0)
+				}
 			} else {
 				push(0)
 			}

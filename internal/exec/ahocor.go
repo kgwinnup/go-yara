@@ -1,11 +1,11 @@
 package exec
 
-type Node struct {
+type ACNode struct {
 	id          int
 	data        byte
-	children    map[byte]*Node
-	fail        *Node
-	alternative *Node
+	children    map[byte]*ACNode
+	fail        *ACNode
+	alternative *ACNode
 	match       int
 	// index in the current pattern, used for partial compares if
 	// access to the start of the pattern is needed.
@@ -13,14 +13,14 @@ type Node struct {
 	pattern    Pattern
 }
 
-func build(patterns []Pattern) []*Node {
+func ACBuild(patterns []Pattern) []*ACNode {
 
-	nodes := make([]*Node, 0)
+	nodes := make([]*ACNode, 0)
 
-	root := &Node{
+	root := &ACNode{
 		id:          0,
 		data:        0,
-		children:    make(map[byte]*Node),
+		children:    make(map[byte]*ACNode),
 		fail:        nil,
 		alternative: nil,
 		match:       -1,
@@ -49,10 +49,10 @@ func build(patterns []Pattern) []*Node {
 				continue
 			}
 
-			node := &Node{
+			node := &ACNode{
 				id:         ids,
 				data:       b,
-				children:   make(map[byte]*Node),
+				children:   make(map[byte]*ACNode),
 				fail:       nil,
 				match:      -1,
 				matchIndex: j,
@@ -73,7 +73,7 @@ func build(patterns []Pattern) []*Node {
 
 	root.fail = root
 
-	failQueue := make([]*Node, 0)
+	failQueue := make([]*ACNode, 0)
 
 	// set the first node of each branch fail point back to root
 	for _, child := range root.children {
@@ -128,9 +128,9 @@ func build(patterns []Pattern) []*Node {
 	return nodes
 }
 
-// next will perform a single byte transition of the automata,
+// ACNext will perform a single byte transition of the automata,
 // returning any indexes where a pattern is hit
-func next(nodes []*Node, index int, b byte, bindex int) int {
+func ACNext(nodes []*ACNode, index int, b byte, bindex int) int {
 
 	node := nodes[index]
 

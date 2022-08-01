@@ -13,6 +13,7 @@ import (
 func main() {
 
 	debug := flag.Bool("debug", false, "debug rules")
+	showString := flag.Bool("s", false, "show string matches and offsets")
 	flag.Parse()
 
 	rule := ""
@@ -57,14 +58,17 @@ func main() {
 			continue
 		}
 
-		output, err := yara.Scan(contents)
+		output, err := yara.Scan(contents, *showString)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			continue
 		}
 
 		for _, obj := range output {
-			fmt.Println(obj.Name, strings.Join(obj.Tags, ","))
+			fmt.Println("Rule:", obj.Name, strings.Join(obj.Tags, ","))
+			for _, str := range obj.Strings {
+				fmt.Println("   ", str)
+			}
 		}
 	}
 

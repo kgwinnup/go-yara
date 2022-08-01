@@ -4,6 +4,10 @@ The purpose of this project is primarily for backends written in
 Golang requiring Yara. Statically compiling Yara is doable but is a
 pain, and it muddies up the Golang build pipeline.
 
+My primary use case is matching against text files so the focus is on
+getting that feature compatible first, and of course the condition
+evaluation.
+
 I also created this project for fun :) Writing parsers and
 interpreters are fun, and I enjoy Golang development, even for
 parsers.
@@ -11,21 +15,52 @@ parsers.
 <strong>This project is a work in progress</strong>
 
 - [x] lexer and parser
-- [x] operations/condition evaluation (pre Yara 4.2)
+- [x] operations/condition evaluation
+- [ ] some but not all iterators
 - [x] standard string pattern types
 - [ ] regex pattern types
 - [ ] bytes pattern types
-- [ ] Yara 4.2+ evaluation support
+- [ ] modules 
 
 # Differences with C Yara
 
 The goal is to be feature compatible in all ways, there are areas
 where there is some divergence.
 
-1. All go-yara Yara files are UTF8 encoded, and as such Unicode is
-   supported by default in a string pattern. All String patterns are
-   matched on their exact bytes. So if your UTF8 contains code points
-   that are multi-byte, they will be matched correctly. As a result of
-   this, the "wide" keyword now converts the UTF8 string into
-   UTF16LE.
+## UTF8 encoding by default for Yara files.
 
+Note, I have not read the original Yara C source that closely. Go-yara
+is UTF8 encoded by default; this includes all patterns (standard
+strings and regex). The matching algorithm uses the raw bytes for
+these patterns, including any UTF8 multibyte code points. The `ascii`
+modifier leaves the pattern unchanged and in its UTF8 form; the user
+is responsible for removing non-ASCII chars if they are present. The
+larger change is with the `wide` modifier. In the C Yara `wide` will
+add null bytes after each ASCII char (1 byte) and transform into
+UTF16LE. Go-yara will transform the UTF8 pattern into UTF16 and fully
+support any Unicode characters.
+
+# Example
+
+see the `cmd/main.go` for a full example
+
+```
+contents, err := ioutil.ReadFile(arg)
+if err != nil {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	continue
+}
+
+output, err := yara.Scan(contents, true)
+if err != nil {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	continue
+}
+
+for _, obj := range output {
+	fmt.Println("Rule:", obj.Name, strings.Join(obj.Tags, ","))
+	for _, str := range obj.Strings {
+		fmt.Println("   ", str)
+	}
+}
+```

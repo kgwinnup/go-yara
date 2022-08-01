@@ -366,6 +366,108 @@ func (p *Parser) makeSet(node ast.Node) ast.Node {
 	return &ast.Set{Nodes: ret}
 }
 
+func (p *Parser) parseFor() (ast.Node, error) {
+	_, err := p.expectRead(lexer.FOR, "expecting a for keyword")
+	if err != nil {
+		return nil, err
+	}
+
+	expr, err := p.lexer.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	switch expr.Type {
+	case lexer.INTEGER, lexer.ANY, lexer.ALL:
+	default:
+		return nil, errors.New(fmt.Sprintf("for expression expects 'any' or 'all' keywords, got '%v'", expr))
+	}
+
+	tok, _ := p.lexer.Peek()
+
+	if tok.Type == lexer.IDENTITY {
+		_var, _ := p.lexer.Next()
+		if _var.Type != lexer.IDENTITY {
+			return nil, errors.New("expecting an identity")
+		}
+
+		_, _ = p.lexer.Next()
+
+		set, err := p.parseExpr(0)
+		if err != nil {
+			return nil, err
+		}
+
+		if prefix, ok := set.(*ast.Prefix); ok {
+			set = prefix.Right
+		}
+
+		_, err = p.expectRead(lexer.COLON, "expecting colon")
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.expectRead(lexer.LPAREN, "expecting left paren")
+		if err != nil {
+			return nil, err
+		}
+
+		body, err := p.parseExpr(0)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.expectRead(lexer.RPAREN, "expecting right paren")
+		if err != nil {
+			return nil, err
+		}
+
+		return &ast.For{
+			Expr:      expr,
+			Var:       _var.Raw,
+			StringSet: set,
+			Body:      body,
+		}, nil
+
+	} else if tok.Type == lexer.IN || tok.Type == lexer.OF {
+		_, _ = p.lexer.Next()
+		set, err := p.parseExpr(0)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.expectRead(lexer.COLON, "expecting colon")
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.expectRead(lexer.LPAREN, "expecting left paren")
+		if err != nil {
+			return nil, err
+		}
+
+		body, err := p.parseExpr(0)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.expectRead(lexer.RPAREN, "expecting right paren")
+		if err != nil {
+			return nil, err
+		}
+
+		return &ast.For{
+			Expr:      expr,
+			Var:       "",
+			StringSet: set,
+			Body:      body,
+		}, nil
+	} else {
+		return nil, errors.New(fmt.Sprintf("for expression expects 'of' or 'in' keywords or an identity like 'i', got '%v'", expr))
+	}
+
+}
+
 func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 	p.whitespace()
@@ -446,6 +548,14 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 				}
 			}
 
+		case lexer.FOR:
+			node, err := p.parseFor()
+			if err != nil {
+				return nil, err
+			}
+
+			left = node
+
 		case lexer.FILESIZE, lexer.WIDE, lexer.NOCASE, lexer.ASCII, lexer.THEM, lexer.NONE, lexer.ALL, lexer.ANY:
 			tok, _ := p.lexer.Next()
 			left = &ast.Keyword{
@@ -510,9 +620,22 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 		case lexer.VARIABLE:
 			tok, _ := p.lexer.Next()
-			left = &ast.Variable{
-				Token: tok,
-				Value: tok.Raw,
+			tok2, _ := p.lexer.Peek()
+
+			if tok2.Type == lexer.ASTERISK {
+				p.lexer.Next()
+
+				left = &ast.Variable{
+					Token: tok,
+					Value: tok.Raw + "*",
+				}
+
+			} else {
+
+				left = &ast.Variable{
+					Token: tok,
+					Value: tok.Raw,
+				}
 			}
 
 		case lexer.IDENTITY:
@@ -527,6 +650,17 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 		default:
 			return nil, errors.New(fmt.Sprintf("invalid expression at: '%v'", tok.Raw))
+		}
+	}
+
+	if integer, ok := left.(*ast.Integer); ok {
+		tok, _ := p.lexer.Peek()
+		if tok.Type == lexer.KB {
+			p.lexer.Next()
+			integer.Value = integer.Value * 1024
+		} else if tok.Type == lexer.MB {
+			p.lexer.Next()
+			integer.Value = integer.Value * (2 ^ 20)
 		}
 	}
 

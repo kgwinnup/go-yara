@@ -198,3 +198,21 @@ rule OfExample1
 		t.Fatal("OF pattern failed to match")
 	}
 }
+
+func TestForRange(t *testing.T) {
+	rule := `rule Occurrences
+{
+    strings:
+        $a = "dummy1"
+        $b = "dummy2"
+
+    condition:
+        for any i in (0..3) : ( @a[i] + 10 == @b[i] )
+}`
+
+	input := "dummy1    dummy2"
+	out, _ := testCompile(rule, input)
+	if len(out) == 0 {
+		t.Fatal("OF pattern failed to match")
+	}
+}

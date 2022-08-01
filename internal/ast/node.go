@@ -26,6 +26,7 @@ const (
 	BYTES
 	IMPORT
 	SET
+	FOR
 )
 
 // IsPrimitive returns true if the node is a primitive value like an
@@ -65,6 +66,24 @@ type Node interface {
 	String() string
 }
 
+type For struct {
+	Expr      *lexer.Token
+	StringSet Node
+	Var       string
+	Body      Node
+}
+
+func (f For) String() string {
+	if f.Var == "" {
+		return fmt.Sprintf("for %v of %v : (%v)", f.Expr.Raw, f.StringSet, f.Body)
+	}
+	return fmt.Sprintf("for %v %v in %v : (%v)", f.Expr.Raw, f.Var, f.StringSet, f.Body)
+}
+
+func (f For) Type() int {
+	return FOR
+}
+
 type Set struct {
 	Nodes []Node
 }
@@ -94,7 +113,7 @@ type Keyword struct {
 	Attribute Node
 }
 
-func (k *Keyword) String() string {
+func (k Keyword) String() string {
 	if k.Attribute != nil {
 		return fmt.Sprintf("%v(%v)", k.Value, k.Attribute)
 	}
@@ -111,7 +130,7 @@ type Bytes struct {
 	Items []string
 }
 
-func (b *Bytes) String() string {
+func (b Bytes) String() string {
 	var builder strings.Builder
 	builder.WriteRune('{')
 	builder.WriteRune(' ')
@@ -134,7 +153,7 @@ type Identity struct {
 	Value string
 }
 
-func (i *Identity) String() string {
+func (i Identity) String() string {
 	return i.Value
 }
 
@@ -147,7 +166,7 @@ type Variable struct {
 	Value string
 }
 
-func (v *Variable) String() string {
+func (v Variable) String() string {
 	return v.Value
 }
 
@@ -165,7 +184,7 @@ type Rule struct {
 	Meta      []Node
 }
 
-func (r *Rule) String() string {
+func (r Rule) String() string {
 	var builder strings.Builder
 
 	if r.Private {
@@ -231,7 +250,7 @@ type Prefix struct {
 	Right Node
 }
 
-func (p *Prefix) String() string {
+func (p Prefix) String() string {
 	if p.Token.Type == lexer.LPAREN {
 		return fmt.Sprintf("(%v)", p.Right)
 	}
@@ -253,7 +272,7 @@ type Infix struct {
 	Right Node
 }
 
-func (i *Infix) String() string {
+func (i Infix) String() string {
 
 	if i.Token.Type == lexer.LBRACKET {
 		return fmt.Sprintf("%v[%v]", i.Left, i.Right)
@@ -266,16 +285,12 @@ func (i *Infix) Type() int {
 	return INFIX
 }
 
-type BytePattern struct {
-	Token *lexer.Token
-}
-
 type String struct {
 	Token *lexer.Token
 	Value string
 }
 
-func (s *String) String() string {
+func (s String) String() string {
 	return fmt.Sprintf("\"%v\"", s.Value)
 }
 
@@ -288,7 +303,7 @@ type Regex struct {
 	Value string
 }
 
-func (r *Regex) String() string {
+func (r Regex) String() string {
 	return fmt.Sprintf("/%v/", r.Value)
 }
 
@@ -301,7 +316,7 @@ type Bool struct {
 	Value bool
 }
 
-func (b *Bool) String() string {
+func (b Bool) String() string {
 	return fmt.Sprintf("%v", b.Value)
 }
 
@@ -314,7 +329,7 @@ type Integer struct {
 	Value int64
 }
 
-func (i *Integer) String() string {
+func (i Integer) String() string {
 	return fmt.Sprintf("%v", i.Token.Raw)
 }
 
@@ -327,7 +342,7 @@ type Import struct {
 	Value string
 }
 
-func (i *Import) String() string {
+func (i Import) String() string {
 	return fmt.Sprintf("import \"%v\"", i.Value)
 }
 
@@ -341,7 +356,7 @@ type Assignment struct {
 	Attributes map[int]Node
 }
 
-func (a *Assignment) String() string {
+func (a Assignment) String() string {
 	attrs := ""
 	for _, attr := range a.Attributes {
 		attrs += fmt.Sprintf("%v ", attr)
@@ -354,26 +369,38 @@ func (a *Assignment) Type() int {
 	return ASSIGNMENT
 }
 
+type BytePattern struct {
+	Patterns [][]byte
+	Offsets  []int
+	Nocase   bool
+}
+
 // BytePattern returns a byte slice which represents the pattern to
 // search for, an offset for use if the pattern is partial and located
 // somewhere in the full pattern, a bool to say if this is case
 // insensitive or not, and an error.
-func (a *Assignment) BytePattern() ([]byte, int, bool, error) {
+func (a *Assignment) BytePattern() (*BytePattern, error) {
 
-	nocase := false
+	ret := &BytePattern{
+		Patterns: make([][]byte, 0),
+		Offsets:  make([]int, 0),
+		Nocase:   false,
+	}
 
 	if str, ok := a.Right.(*String); ok {
 
 		if _, ok := a.Attributes[lexer.NOCASE]; ok {
-			nocase = true
+			ret.Nocase = true
 		}
 
 		if _, ok := a.Attributes[lexer.ASCII]; ok {
 			if _, ok := a.Attributes[lexer.BASE64]; ok {
 				encoded := base64.StdEncoding.EncodeToString([]byte(str.Value))
-				return []byte(encoded), 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, []byte(encoded))
+				return ret, nil
 			} else {
-				return []byte(str.Value), 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, []byte(str.Value))
+				return ret, nil
 			}
 		}
 
@@ -389,23 +416,26 @@ func (a *Assignment) BytePattern() ([]byte, int, bool, error) {
 
 			if _, ok := a.Attributes[lexer.BASE64]; ok {
 				encoded := base64.StdEncoding.EncodeToString(byteSlice)
-				return []byte(encoded), 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, []byte(encoded))
+				return ret, nil
 			} else {
-				return byteSlice, 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, byteSlice)
+				return ret, nil
 			}
 		}
 
 		// default is ascii/utf8
-		return []byte(str.Value), 0, nocase, nil
+		ret.Patterns = append(ret.Patterns, []byte(str.Value))
+		return ret, nil
 	}
 
 	if _, ok := a.Right.(*Bytes); ok {
-		return nil, 0, false, errors.New("byte patterns are not supported at this time")
+		return nil, errors.New("byte patterns are not supported at this time")
 	}
 
 	if _, ok := a.Right.(*Regex); ok {
-		return nil, 0, false, errors.New("Regex patterns are not supported at this time")
+		return nil, errors.New("Regex patterns are not supported at this time")
 	}
 
-	return nil, 0, false, errors.New("Unsupported pattern type")
+	return nil, errors.New("Unsupported pattern type")
 }

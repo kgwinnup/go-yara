@@ -20,8 +20,8 @@ func New(rule string) (*Yara, error) {
 	return &Yara{compiled: compiled}, nil
 }
 
-func (y *Yara) Scan(input []byte) ([]*exec.ScanOutput, error) {
-	output, err := y.compiled.Scan([]byte(input))
+func (y *Yara) Scan(input []byte, s bool) ([]*exec.ScanOutput, error) {
+	output, err := y.compiled.Scan([]byte(input), s)
 	if err != nil {
 		return nil, err
 	}

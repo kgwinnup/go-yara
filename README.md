@@ -16,7 +16,7 @@ parsers.
 
 - [x] lexer and parser
 - [x] operations/condition evaluation
-- [o] some but not all iterators
+- [ ] some but not all iterators
 - [x] standard string pattern types
 - [ ] regex pattern types
 - [ ] bytes pattern types

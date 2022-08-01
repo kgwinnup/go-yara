@@ -410,7 +410,7 @@ func (s *Lexer) next() (*Token, error) {
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return s.readNumber()
 
-	case '$', '#', '?':
+	case '$', '#', '?', '@':
 		r, _ := s.read()
 		ident, err := s.readIdentity()
 		if err != nil {
@@ -423,6 +423,10 @@ func (s *Lexer) next() (*Token, error) {
 
 		if r == '#' {
 			return &Token{Raw: "#" + ident.Raw, Type: VARIABLE}, nil
+		}
+
+		if r == '@' {
+			return &Token{Raw: "@" + ident.Raw, Type: VARIABLE}, nil
 		}
 
 		return &Token{Raw: "?" + ident.Raw, Type: IDENTITY}, nil

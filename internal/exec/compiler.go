@@ -92,7 +92,9 @@ func (c *CompiledRules) Scan(input []byte) ([]*ScanOutput, error) {
 	return output, nil
 }
 
-// Compile an input Yara rule(s) and create the machine to scan input files
+// Compile an input Yara rule(s) and create both the pattern objects
+// that will be matched on, add the patterns to the aho-corasick
+// automatons, and create the instructions to evaluate each rule
 func Compile(input string) (*CompiledRules, error) {
 	parser, err := parser.New(input)
 	if err != nil {
@@ -129,46 +131,51 @@ func Compile(input string) (*CompiledRules, error) {
 		for _, node := range rule.Strings {
 			if assign, ok := node.(*ast.Assignment); ok {
 
-				patternSlice, _, nocase, err := assign.BytePattern()
+				bytePattern, err := assign.BytePattern()
 				if err != nil {
 					return nil, err
 				}
 
-				if nocase {
-					for i := 0; i < len(patternSlice); i++ {
-						patternSlice[i] = toLower(patternSlice[i])
-					}
-				}
-
 				hash := fmt.Sprintf("%x", sha256.Sum256([]byte(assign.Right.String())))
 
-				temp := NewStringPattern(assign.Left, rule.Name, nocase, patternSlice)
+				if _, ok := assign.Right.(*ast.String); ok {
+					if bytePattern.Nocase {
+						for i := 0; i < len(bytePattern.Patterns[0]); i++ {
+							bytePattern.Patterns[0][i] = toLower(bytePattern.Patterns[0][i])
+						}
+					}
+					temp := NewStringPattern(assign.Left, rule.Name, bytePattern.Nocase, bytePattern.Patterns[0])
 
-				// check if the pattern is identical to another existing pattern. If
-				// so add a pointer with this patterns name to point to the existing
-				// identical pattern. This prevents duplicate items being added to the
-				// automaton.
-				pattern, ok := dups[hash]
-				if ok {
-					compiled.mappings[temp.Name()] = pattern
-				} else {
-					dups[hash] = temp
-
-					if temp.nocase {
-						patternsNocase = append(patternsNocase, temp)
+					// check if the pattern is identical to another existing pattern. If
+					// so add a pointer with this patterns name to point to the existing
+					// identical pattern. This prevents duplicate items being added to the
+					// automaton.
+					pattern, ok := dups[hash]
+					if ok {
+						compiled.mappings[temp.Name()] = pattern
 					} else {
-						patterns = append(patterns, temp)
+						dups[hash] = temp
+
+						if bytePattern.Nocase {
+							patternsNocase = append(patternsNocase, temp)
+						} else {
+							patterns = append(patterns, temp)
+						}
+
+						compiled.mappings[temp.Name()] = temp
 					}
 
-					compiled.mappings[temp.Name()] = temp
+				} else {
+					return nil, errors.New("compiler: invalid strings type")
 				}
+
 			}
 		}
 
 		compiled.rules = append(compiled.rules, compiledRule)
 
 		instr := make([]Op, 0)
-		err := compiled.compileCondition(rule.Name, rule.Condition, &instr)
+		err := compiled.compileNode(rule.Name, rule.Condition, &instr)
 		if err != nil {
 			return nil, err
 		}
@@ -204,9 +211,9 @@ func (c *CompiledRules) patternsInRule(ruleName string) []string {
 	return patterns
 }
 
-// compileCondition is the function responsible for building the
+// compileNode is the function responsible for building the
 // instruction sequence for evaluation.
-func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *[]Op) error {
+func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op) error {
 
 	if infix, ok := node.(*ast.Infix); ok {
 
@@ -214,7 +221,7 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 		// as a single instruction. Intercept here and process accordingly.
 		switch infix.Token.Type {
 		case lexer.IN:
-			c.compileCondition(ruleName, infix.Right, accum)
+			c.compileNode(ruleName, infix.Right, accum)
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
 				*accum = append(*accum, Op{OpCode: IN, VarParam: name})
@@ -232,7 +239,7 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 					*accum = append(*accum, Op{OpCode: LOADCOUNT, VarParam: name})
 				}
 			} else {
-				c.compileCondition(ruleName, infix.Right, accum)
+				c.compileNode(ruleName, infix.Right, accum)
 			}
 
 			if integer, ok := infix.Left.(*ast.Integer); ok {
@@ -256,7 +263,7 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 
 		case lexer.LBRACKET:
 			if v, ok := infix.Left.(*ast.Variable); ok {
-				c.compileCondition(ruleName, infix.Right, accum)
+				c.compileNode(ruleName, infix.Right, accum)
 
 				name := strings.Replace(v.Value, "@", "$", 1)
 				*accum = append(*accum, Op{OpCode: LOADOFFSET, VarParam: name})
@@ -270,8 +277,8 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 		}
 
 		// recurse the left and right branches and push those instructions onto the sequence.
-		c.compileCondition(ruleName, infix.Left, accum)
-		c.compileCondition(ruleName, infix.Right, accum)
+		c.compileNode(ruleName, infix.Left, accum)
+		c.compileNode(ruleName, infix.Right, accum)
 
 		// handle the infix operation now that the left and right values are processed.
 		switch infix.Token.Type {
@@ -314,7 +321,7 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 
 	if set, ok := node.(*ast.Set); ok {
 		for _, node := range set.Nodes {
-			c.compileCondition(ruleName, node, accum)
+			c.compileNode(ruleName, node, accum)
 		}
 
 		// finally push the number of nodes pushed onto the stack
@@ -322,7 +329,7 @@ func (c *CompiledRules) compileCondition(ruleName string, node ast.Node, accum *
 	}
 
 	if prefix, ok := node.(*ast.Prefix); ok {
-		c.compileCondition(ruleName, prefix.Right, accum)
+		c.compileNode(ruleName, prefix.Right, accum)
 
 		switch prefix.Token.Type {
 		case lexer.MINUS:

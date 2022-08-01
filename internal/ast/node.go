@@ -26,6 +26,7 @@ const (
 	BYTES
 	IMPORT
 	SET
+	FOR
 )
 
 // IsPrimitive returns true if the node is a primitive value like an
@@ -63,6 +64,24 @@ func IsModuleCall(node Node) bool {
 type Node interface {
 	Type() int
 	String() string
+}
+
+type For struct {
+	Expr      Node
+	StringSet Node
+	Var       string
+	Body      Node
+}
+
+func (f For) String() string {
+	if f.Var == "" {
+		return fmt.Sprintf("for %v of %v : (%v)", f.Expr, f.StringSet, f.Body)
+	}
+	return fmt.Sprintf("for %v %v in %v : (%v)", f.Expr, f.Var, f.StringSet, f.Body)
+}
+
+func (f For) Type() int {
+	return FOR
 }
 
 type Set struct {
@@ -266,10 +285,6 @@ func (i *Infix) Type() int {
 	return INFIX
 }
 
-type BytePattern struct {
-	Token *lexer.Token
-}
-
 type String struct {
 	Token *lexer.Token
 	Value string
@@ -354,26 +369,38 @@ func (a *Assignment) Type() int {
 	return ASSIGNMENT
 }
 
+type BytePattern struct {
+	Patterns [][]byte
+	Offsets  []int
+	Nocase   bool
+}
+
 // BytePattern returns a byte slice which represents the pattern to
 // search for, an offset for use if the pattern is partial and located
 // somewhere in the full pattern, a bool to say if this is case
 // insensitive or not, and an error.
-func (a *Assignment) BytePattern() ([]byte, int, bool, error) {
+func (a *Assignment) BytePattern() (*BytePattern, error) {
 
-	nocase := false
+	ret := &BytePattern{
+		Patterns: make([][]byte, 0),
+		Offsets:  make([]int, 0),
+		Nocase:   false,
+	}
 
 	if str, ok := a.Right.(*String); ok {
 
 		if _, ok := a.Attributes[lexer.NOCASE]; ok {
-			nocase = true
+			ret.Nocase = true
 		}
 
 		if _, ok := a.Attributes[lexer.ASCII]; ok {
 			if _, ok := a.Attributes[lexer.BASE64]; ok {
 				encoded := base64.StdEncoding.EncodeToString([]byte(str.Value))
-				return []byte(encoded), 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, []byte(encoded))
+				return ret, nil
 			} else {
-				return []byte(str.Value), 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, []byte(str.Value))
+				return ret, nil
 			}
 		}
 
@@ -389,23 +416,26 @@ func (a *Assignment) BytePattern() ([]byte, int, bool, error) {
 
 			if _, ok := a.Attributes[lexer.BASE64]; ok {
 				encoded := base64.StdEncoding.EncodeToString(byteSlice)
-				return []byte(encoded), 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, []byte(encoded))
+				return ret, nil
 			} else {
-				return byteSlice, 0, nocase, nil
+				ret.Patterns = append(ret.Patterns, byteSlice)
+				return ret, nil
 			}
 		}
 
 		// default is ascii/utf8
-		return []byte(str.Value), 0, nocase, nil
+		ret.Patterns = append(ret.Patterns, []byte(str.Value))
+		return ret, nil
 	}
 
 	if _, ok := a.Right.(*Bytes); ok {
-		return nil, 0, false, errors.New("byte patterns are not supported at this time")
+		return nil, errors.New("byte patterns are not supported at this time")
 	}
 
 	if _, ok := a.Right.(*Regex); ok {
-		return nil, 0, false, errors.New("Regex patterns are not supported at this time")
+		return nil, errors.New("Regex patterns are not supported at this time")
 	}
 
-	return nil, 0, false, errors.New("Unsupported pattern type")
+	return nil, errors.New("Unsupported pattern type")
 }

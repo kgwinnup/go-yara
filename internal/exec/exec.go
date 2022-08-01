@@ -29,6 +29,11 @@ const (
 	AT
 	IN
 	OF
+	MOVR
+	INCR
+	DECR
+	PUSHR
+	LOOP
 )
 
 type Op struct {
@@ -40,7 +45,7 @@ type Op struct {
 func (o Op) String() string {
 	switch o.OpCode {
 	case LOADCOUNT:
-		return fmt.Sprintf("LOAD %v", o.VarParam)
+		return fmt.Sprintf("LOADCOUNT %v", o.VarParam)
 	case LOADOFFSET:
 		return fmt.Sprintf("LOADOFFSET %v", o.VarParam)
 	case PUSH:
@@ -83,10 +88,26 @@ func (o Op) String() string {
 		return fmt.Sprintf("IN %v", o.VarParam)
 	case OF:
 		return fmt.Sprintf("OF %v", o.IntParam)
+	case MOVR:
+		return fmt.Sprintf("MOVR %v", o.IntParam)
+	case INCR:
+		return fmt.Sprintf("INCR %v", o.IntParam)
+	case DECR:
+		return fmt.Sprintf("DECR %v", o.IntParam)
+	case PUSHR:
+		return fmt.Sprintf("PUSHR %v", o.IntParam)
+	case LOOP:
+		return fmt.Sprintf("LOOP %v", o.IntParam)
 	default:
 		return "WAT"
 	}
 }
+
+const (
+	RC = iota
+	R1
+	R2
+)
 
 func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 
@@ -105,6 +126,8 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 		stack = append([]int64{i}, stack...)
 	}
 
+	regs := []int64{0, 0, 0}
+
 	for {
 
 		if index >= len(rule.instr) {
@@ -114,6 +137,24 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 		cur := rule.instr[index]
 
 		switch cur.OpCode {
+		case MOVR:
+			left = pop()
+			regs[cur.IntParam] = left
+
+		case INCR:
+			regs[cur.IntParam]++
+
+		case DECR:
+			regs[cur.IntParam]--
+
+		case PUSHR:
+			push(regs[cur.IntParam])
+
+		case LOOP:
+			if regs[RC] > 0 {
+				index = int(cur.IntParam)
+			}
+
 		case LOADCOUNT:
 			if pattern, ok := mappings[cur.VarParam]; ok {
 				push(pattern.Count())

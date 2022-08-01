@@ -39,3 +39,28 @@ larger change is with the `wide` modifier. In the C Yara `wide` will
 add null bytes after each ASCII char (1 byte) and transform into
 UTF16LE. Go-yara will transform the UTF8 pattern into UTF16 and fully
 support any Unicode characters.
+
+# Example
+
+see the `cmd/main.go` for a full example
+
+```
+contents, err := ioutil.ReadFile(arg)
+if err != nil {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	continue
+}
+
+output, err := yara.Scan(contents, true)
+if err != nil {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	continue
+}
+
+for _, obj := range output {
+	fmt.Println("Rule:", obj.Name, strings.Join(obj.Tags, ","))
+	for _, str := range obj.Strings {
+		fmt.Println("   ", str)
+	}
+}
+```

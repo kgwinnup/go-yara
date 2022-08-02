@@ -257,7 +257,8 @@ func (c *CompiledRules) setToStringSlice(ruleName string, set *ast.Set) []string
 
 // compileNode is the function responsible for building the
 // instruction sequence for evaluation.
-// in general, I am unhappy with this function, super messy.
+// in general, I am unhappy with this function, super messy, but the
+// operation are simple and the code isn't that long so...
 func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op) error {
 
 	push := func(op Op) {
@@ -281,7 +282,6 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			return nil
 
 		case lexer.OF:
-
 			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 				names := c.patternsInRule(ruleName)
 				for _, name := range names {

@@ -198,6 +198,8 @@ func (p *Parser) parseBody() ([]ast.Node, error) {
 
 	for {
 
+		p.whitespace()
+
 		assignment := &ast.Assignment{}
 		assignment.Attributes = make(map[int]ast.Node, 0)
 
@@ -294,7 +296,7 @@ func (p *Parser) parseTags() ([]string, error) {
 
 func (p *Parser) whitespace() {
 	for {
-		if tok, _ := p.lexer.Peek(); tok != nil && tok.Type == lexer.NEWLINE {
+		if tok, _ := p.lexer.Peek(); tok != nil && (tok.Type == lexer.NEWLINE || tok.Type == lexer.COMMENT) {
 			p.lexer.Next()
 			continue
 		}

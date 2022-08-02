@@ -3,7 +3,7 @@ package exec
 type ACNode struct {
 	id          int
 	data        byte
-	children    map[byte]*ACNode
+	children    []*ACNode
 	fail        *ACNode
 	alternative *ACNode
 	match       int
@@ -19,7 +19,7 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 	root := &ACNode{
 		id:          0,
 		data:        0,
-		children:    make(map[byte]*ACNode),
+		children:    make([]*ACNode, 256),
 		fail:        nil,
 		alternative: nil,
 		match:       -1,
@@ -37,7 +37,7 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 		bs := pattern.Pattern
 		for j, b := range bs {
 
-			if node, ok := cur.children[b]; ok {
+			if node := cur.children[b]; node != nil {
 
 				if j == len(bs)-1 {
 					node.match = pattern.MatchIndex
@@ -50,7 +50,7 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 			node := &ACNode{
 				id:          ids,
 				data:        b,
-				children:    make(map[byte]*ACNode),
+				children:    make([]*ACNode, 256),
 				fail:        nil,
 				match:       -1,
 				matchOffset: j,
@@ -74,6 +74,9 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 
 	// set the first node of each branch fail point back to root
 	for _, child := range root.children {
+		if child == nil {
+			continue
+		}
 		child.fail = root
 		failQueue = append(failQueue, child)
 	}
@@ -89,10 +92,15 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 
 		// for each child in this branch find the largest suffix
 		for _, child := range cur.children {
+			if child == nil {
+				continue
+			}
+
 			temp := cur.fail
 
 			for {
-				_, ok := temp.children[child.data]
+				node := temp.children[child.data]
+				ok := node != nil
 
 				// we're at the largest suffix so far
 				if !ok && temp != root {
@@ -105,7 +113,7 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 
 			}
 
-			if node, ok := temp.children[child.data]; ok {
+			if node := temp.children[child.data]; node != nil {
 				child.fail = node // proper suffix
 			} else {
 				child.fail = root // no suffix
@@ -133,10 +141,10 @@ func ACNext(matches []*[]int, nodes []*ACNode, index int, b byte, bindex int) in
 
 Start:
 	// check if there is a path
-	new, ok := node.children[b]
+	new := node.children[b]
 
 	// if there is a child node that matches the input
-	if ok {
+	if new != nil {
 		// transition to the next node
 		node = new
 
@@ -170,7 +178,7 @@ Start:
 		// jump to each failure node until a next matching
 		// transition node is found, or back at the root.
 		for {
-			_, ok := node.children[b]
+			ok := node.children[b] != nil
 
 			if node.id == 0 {
 				break
@@ -184,7 +192,7 @@ Start:
 		}
 
 		// rerun this input char again as we moved nodes
-		if _, ok := node.children[b]; ok {
+		if node.children[b] != nil {
 			goto Start
 		}
 	}

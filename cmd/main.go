@@ -66,9 +66,6 @@ func main() {
 
 		for _, obj := range output {
 			fmt.Println("Rule:", obj.Name, strings.Join(obj.Tags, ","))
-			for _, str := range obj.Strings {
-				fmt.Println("   ", str)
-			}
 		}
 	}
 

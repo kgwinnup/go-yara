@@ -8,6 +8,7 @@ import (
 const (
 	LOADCOUNT = iota
 	LOADOFFSET
+	LOADSTATIC
 	PUSH
 	EXCEPT
 	AND
@@ -50,6 +51,8 @@ func (o Op) String() string {
 		return fmt.Sprintf("LOADCOUNT %v", o.VarParam)
 	case LOADOFFSET:
 		return fmt.Sprintf("LOADOFFSET %v", o.VarParam)
+	case LOADSTATIC:
+		return fmt.Sprintf("LOADSTATIC %v", o.VarParam)
 	case PUSH:
 		return fmt.Sprintf("PUSH %v", o.IntParam)
 	case AND:
@@ -116,7 +119,7 @@ const (
 	R3
 )
 
-func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
+func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64) (int64, error) {
 
 	index := 0
 	var ret int64
@@ -174,8 +177,8 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 			regs[3] = 0
 
 		case LOADCOUNT:
-			if pattern, ok := mappings[cur.VarParam]; ok {
-				push(pattern.Count())
+			if lst, ok := matches[cur.VarParam]; ok {
+				push(int64(len(*lst)))
 			} else {
 				push(0)
 			}
@@ -183,12 +186,19 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 		case LOADOFFSET:
 			index := pop()
 
-			if pattern, ok := mappings[cur.VarParam]; ok {
-				if int(index) < len(pattern.Indexes()) {
-					push(int64(pattern.Indexes()[index]))
+			if lst, ok := matches[cur.VarParam]; ok {
+				if int(index) < len(*lst) {
+					push(int64((*lst)[index]))
 				} else {
 					push(0)
 				}
+			} else {
+				push(0)
+			}
+
+		case LOADSTATIC:
+			if n, ok := static[cur.VarParam]; ok {
+				push(n)
 			} else {
 				push(0)
 			}
@@ -334,9 +344,9 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 		case AT:
 			right = pop()
 
-			if pattern, ok := mappings[cur.VarParam]; ok {
+			if lst, ok := matches[cur.VarParam]; ok {
 				result := 0
-				for _, index := range pattern.Indexes() {
+				for _, index := range *lst {
 					if index == int(right) {
 						result = 1
 					}
@@ -354,9 +364,9 @@ func Eval(rule *CompiledRule, mappings map[string]Pattern) (int64, error) {
 			// low value in range
 			left = pop()
 
-			if pattern, ok := mappings[cur.VarParam]; ok {
+			if lst, ok := matches[cur.VarParam]; ok {
 				result := 0
-				for _, index := range pattern.Indexes() {
+				for _, index := range *lst {
 					if index > int(left) && index < int(right) {
 						result++
 					}

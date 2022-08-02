@@ -130,7 +130,7 @@ func ACBuild(patterns []Pattern) []*ACNode {
 
 // ACNext will perform a single byte transition of the automata,
 // returning any indexes where a pattern is hit
-func ACNext(nodes []*ACNode, index int, b byte, bindex int) int {
+func ACNext(matches map[string]*[]int, nodes []*ACNode, index int, b byte, bindex int) int {
 
 	node := nodes[index]
 
@@ -145,7 +145,11 @@ Start:
 
 		// check if this node completes a match
 		if node.match >= 0 {
-			node.pattern.AddIndex(bindex - node.matchIndex)
+			if lst, ok := matches[node.pattern.Name()]; ok {
+				*lst = append(*lst, bindex-node.matchIndex)
+			} else {
+				matches[node.pattern.Name()] = &[]int{bindex - node.matchIndex}
+			}
 		}
 
 		// jump to each alternative matching node if they exist
@@ -155,7 +159,12 @@ Start:
 				break
 			}
 
-			node.pattern.AddIndex(bindex - node.matchIndex)
+			if lst, ok := matches[node.pattern.Name()]; ok {
+				*lst = append(*lst, bindex-node.matchIndex)
+			} else {
+				matches[node.pattern.Name()] = &[]int{bindex - node.matchIndex}
+			}
+
 			temp = temp.alternative
 		}
 

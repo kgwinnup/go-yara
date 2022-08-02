@@ -21,9 +21,8 @@ type CompiledRule struct {
 }
 
 type ScanOutput struct {
-	Name    string
-	Tags    []string
-	Strings []string
+	Name string
+	Tags []string
 }
 
 type CompiledRules struct {
@@ -69,39 +68,28 @@ func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 
 	output := make([]*ScanOutput, 0)
 
-	c.mappings["filesize"] = NewConstantPattern("filesize", len(input))
+	matches := make(map[string]*[]int)
+
+	global := make(map[string]int64)
+	global["filesize"] = int64(len(input))
 
 	for i, b := range input {
 		// get the next node in the automata and return a list of
 		// matches indexed the same as the patterns slice
-		nodeId = ACNext(c.automata, nodeId, b, i)
-		nodeIdNocase = ACNext(c.automataNocase, nodeIdNocase, toLower(b), i)
+		nodeId = ACNext(matches, c.automata, nodeId, b, i)
+		nodeIdNocase = ACNext(matches, c.automataNocase, nodeIdNocase, toLower(b), i)
 	}
 
 	for _, rule := range c.rules {
-		out, err := Eval(rule, c.mappings)
+		out, err := Eval(rule, matches, global)
 		if err != nil {
 			return nil, err
 		}
 
 		if out > 0 {
-
-			strs := make([]string, 0)
-
-			if s {
-				for _, pattern := range c.mappings {
-					if pattern.Rule() == rule.name && len(pattern.Indexes()) > 0 {
-						for _, index := range pattern.Indexes() {
-							strs = append(strs, fmt.Sprintf("0x%x:%v", index, strings.Split(pattern.Name(), "_")[1]))
-						}
-					}
-				}
-			}
-
 			output = append(output, &ScanOutput{
-				Name:    rule.name,
-				Tags:    rule.tags,
-				Strings: strs,
+				Name: rule.name,
+				Tags: rule.tags,
 			})
 
 			// add this rule to the global state for other rules to
@@ -437,7 +425,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 	if keyword, ok := node.(*ast.Keyword); ok {
 		switch keyword.Token.Type {
 		case lexer.FILESIZE:
-			push(Op{OpCode: LOADCOUNT, VarParam: keyword.Value})
+			push(Op{OpCode: LOADSTATIC, VarParam: keyword.Value})
 		default:
 			return errors.New(fmt.Sprintf("compiler: invalid keyword: %v", keyword.Value))
 		}

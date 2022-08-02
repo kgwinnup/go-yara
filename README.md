@@ -44,7 +44,19 @@ support any Unicode characters.
 
 see the `cmd/main.go` for a full example
 
+```bash
+go get github.com/kgwinnup/go-yara
 ```
+
+Now in a go file
+
+```
+yara, err := yara.New(rule)
+if err != nil {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+	os.Exit(1)
+}
+
 contents, err := ioutil.ReadFile(arg)
 if err != nil {
 	fmt.Fprintf(os.Stderr, "%v\n", err)

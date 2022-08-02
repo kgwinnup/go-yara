@@ -15,8 +15,7 @@ parsers.
 <strong>This project is a work in progress</strong>
 
 - [x] lexer and parser
-- [x] operations/condition evaluation
-- [ ] some but not all iterators
+- [x] virtual machine for evaluation 
 - [x] standard string pattern types
 - [ ] regex pattern types
 - [ ] bytes pattern types

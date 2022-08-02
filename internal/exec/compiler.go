@@ -429,6 +429,8 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				push(Op{OpCode: LOADCOUNT, VarParam: c.tempVar})
 			}
 		}
+
+		return nil
 	}
 
 	if keyword, ok := node.(*ast.Keyword); ok {
@@ -442,6 +444,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 
 	if n, ok := node.(*ast.Integer); ok {
 		push(Op{OpCode: PUSH, IntParam: n.Value})
+		return nil
 	}
 
 	if ident, ok := node.(*ast.Identity); ok {
@@ -533,7 +536,8 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			return errors.New(fmt.Sprintf("invalid loop expression: '%v'", loop.Expr))
 		}
 
+		return nil
 	}
 
-	return nil
+	return errors.New(fmt.Sprintf("unable to compile: '%v'", node))
 }

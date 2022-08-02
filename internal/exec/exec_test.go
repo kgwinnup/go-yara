@@ -237,3 +237,22 @@ rule Occurrences
 		t.Fatal("OF pattern failed to match")
 	}
 }
+
+func TestForAllThem(t *testing.T) {
+	rule := `
+rule Occurrences
+{
+    strings:
+        $a1 = "dummy1"
+        $a2 = "dummy2"
+
+    condition:
+        for all of them : ( # > 2 )
+}
+`
+	input := "foobar dummy1 dummy1 dummy1   dummy2 dummy2 dummy2"
+	out, _ := testCompile(rule, input)
+	if len(out) == 0 {
+		t.Fatal("OF pattern failed to match")
+	}
+}

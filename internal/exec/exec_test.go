@@ -10,7 +10,7 @@ func testCompile(rule string, input string) ([]*ScanOutput, error) {
 		return nil, err
 	}
 
-	out, err := compiled.Scan([]byte(input))
+	out, err := compiled.Scan([]byte(input), false)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +211,46 @@ func TestForRange(t *testing.T) {
 }`
 
 	input := "dummy1    dummy2"
+	out, _ := testCompile(rule, input)
+	if len(out) == 0 {
+		t.Fatal("OF pattern failed to match")
+	}
+}
+
+func TestForThem(t *testing.T) {
+	rule := `
+rule Occurrences
+{
+    strings:
+        $a1 = "dummy1"
+        $a2 = "dummy2"
+        $b = "foobar"
+
+    condition:
+        // comment
+        for any of them : ( @ > @b )
+}
+`
+	input := "foobar dummy1    dummy2 dummy2"
+	out, _ := testCompile(rule, input)
+	if len(out) == 0 {
+		t.Fatal("OF pattern failed to match")
+	}
+}
+
+func TestForAllThem(t *testing.T) {
+	rule := `
+rule Occurrences
+{
+    strings:
+        $a1 = "dummy1"
+        $a2 = "dummy2"
+
+    condition:
+        for all of them : ( # > 2 )
+}
+`
+	input := "foobar dummy1 dummy1 dummy1   dummy2 dummy2 dummy2"
 	out, _ := testCompile(rule, input)
 	if len(out) == 0 {
 		t.Fatal("OF pattern failed to match")

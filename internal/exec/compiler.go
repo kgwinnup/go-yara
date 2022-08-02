@@ -124,6 +124,7 @@ func Compile(input string) (*CompiledRules, error) {
 
 	rules := make([]*ast.Rule, 0)
 
+	// get all the rule nodes
 	for _, node := range parser.Nodes {
 		if rule, ok := node.(*ast.Rule); ok {
 			rules = append(rules, rule)
@@ -257,7 +258,8 @@ func (c *CompiledRules) setToStringSlice(ruleName string, set *ast.Set) []string
 
 // compileNode is the function responsible for building the
 // instruction sequence for evaluation.
-// in general, I am unhappy with this function, super messy.
+// in general, I am unhappy with this function, super messy, but the
+// operation are simple and the code isn't that long so...
 func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op) error {
 
 	push := func(op Op) {
@@ -275,13 +277,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
 				push(Op{OpCode: IN, VarParam: name})
 			} else {
-				return errors.New(fmt.Sprintf("invalid IN operation, left value must be a variable"))
+				return errors.New(fmt.Sprintf("compiler: invalid IN operation, left value must be a variable"))
 			}
 
 			return nil
 
 		case lexer.OF:
-
 			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 				names := c.patternsInRule(ruleName)
 				for _, name := range names {
@@ -302,10 +303,10 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				case lexer.NONE:
 					*accum = append(*accum, Op{OpCode: OF, IntParam: 0})
 				default:
-					return errors.New(fmt.Sprintf("invalid OF operation, left value must be a integer, 'all', or 'any'"))
+					return errors.New(fmt.Sprintf("compiler: invalid OF operation, left value must be a integer, 'all', or 'any'"))
 				}
 			} else {
-				return errors.New(fmt.Sprintf("invalid OF operation, left value must be a integer"))
+				return errors.New(fmt.Sprintf("compiler: invalid OF operation, left value must be a integer"))
 			}
 
 			return nil
@@ -320,7 +321,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				return nil
 
 			} else {
-				return errors.New(fmt.Sprintf("invalid index operation, left value must be a variable"))
+				return errors.New(fmt.Sprintf("compiler: invalid index operation, left value must be a variable"))
 			}
 
 		}
@@ -358,11 +359,11 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
 				push(Op{OpCode: AT, VarParam: name})
 			} else {
-				return errors.New(fmt.Sprintf("invalid AT operation, left value must be a variable"))
+				return errors.New(fmt.Sprintf("compiler: invalid AT operation, left value must be a variable"))
 			}
 
 		default:
-			return errors.New(fmt.Sprintf("invalid infix operation: %v", infix.Type()))
+			return errors.New(fmt.Sprintf("compiler: invalid infix operation: %v", infix.Type()))
 		}
 
 		return nil
@@ -384,7 +385,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		case lexer.MINUS:
 			push(Op{OpCode: MINUSU})
 		default:
-			return errors.New(fmt.Sprintf("invalid prefix operation: %v", prefix.Type()))
+			return errors.New(fmt.Sprintf("compiler: invalid prefix operation: %v", prefix.Type()))
 		}
 	}
 
@@ -429,6 +430,8 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				push(Op{OpCode: LOADCOUNT, VarParam: c.tempVar})
 			}
 		}
+
+		return nil
 	}
 
 	if keyword, ok := node.(*ast.Keyword); ok {
@@ -436,19 +439,20 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		case lexer.FILESIZE:
 			push(Op{OpCode: LOADCOUNT, VarParam: keyword.Value})
 		default:
-			return errors.New(fmt.Sprintf("invalid keyword: %v", keyword.Value))
+			return errors.New(fmt.Sprintf("compiler: invalid keyword: %v", keyword.Value))
 		}
 	}
 
 	if n, ok := node.(*ast.Integer); ok {
 		push(Op{OpCode: PUSH, IntParam: n.Value})
+		return nil
 	}
 
 	if ident, ok := node.(*ast.Identity); ok {
 		if n, ok := c.tempVars[ident.Value]; ok {
 			push(Op{OpCode: PUSHR, IntParam: n})
 		} else {
-			return errors.New("invalid variable to create instruction")
+			return errors.New("compiler: invalid variable to create instruction")
 		}
 	}
 
@@ -512,7 +516,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			push(Op{OpCode: PUSHR, IntParam: R2})
 
 		} else {
-			return errors.New("loop structure not implemented")
+			return errors.New("compiler: loop structure not implemented")
 		}
 
 		// now wrap up and finish the condition
@@ -530,10 +534,11 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			push(Op{OpCode: PUSH, IntParam: 1})
 			push(Op{OpCode: GTE})
 		} else {
-			return errors.New(fmt.Sprintf("invalid loop expression: '%v'", loop.Expr))
+			return errors.New(fmt.Sprintf("compiler: invalid loop expression: '%v'", loop.Expr))
 		}
 
+		return nil
 	}
 
-	return nil
+	return errors.New(fmt.Sprintf("compiler: unable to compile: '%v'", node))
 }

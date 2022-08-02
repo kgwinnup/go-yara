@@ -488,7 +488,7 @@ func (s *Lexer) readComment() (*Token, error) {
 		r := s.peek()
 
 		if r == '\000' {
-			return nil, errors.New("EOF file reached while scanning comment")
+			return nil, errors.New("lexer: EOF file reached while scanning comment")
 		}
 
 		if r == '*' {
@@ -567,7 +567,7 @@ func (s *Lexer) readNumber() (*Token, error) {
 	typ := INTEGER
 
 	if isHex && builder.Len() == 2 {
-		return nil, errors.New("invalid hex integer, must contain at least 1 number after 0x")
+		return nil, errors.New("lexer: invalid hex integer, must contain at least 1 number after 0x")
 	}
 
 	return &Token{
@@ -585,7 +585,7 @@ func (s *Lexer) readRegex() (*Token, error) {
 		tok := s.peek()
 
 		if tok == '\000' {
-			return nil, errors.New("non-terminated string")
+			return nil, errors.New("lexer: non-terminated regex")
 		}
 
 		// check if the slash is escaped
@@ -632,7 +632,7 @@ func (s *Lexer) readString() (*Token, error) {
 		tok := s.peek()
 
 		if tok == '\000' {
-			return nil, errors.New("non-terminated string")
+			return nil, errors.New("lexer: non-terminated string")
 		}
 
 		if tok == '"' {

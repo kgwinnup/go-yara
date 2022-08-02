@@ -41,18 +41,17 @@ const (
 
 type Op struct {
 	OpCode   int
-	VarParam string
 	IntParam int64
 }
 
 func (o Op) String() string {
 	switch o.OpCode {
 	case LOADCOUNT:
-		return fmt.Sprintf("LOADCOUNT %v", o.VarParam)
+		return fmt.Sprintf("LOADCOUNT %v", o.IntParam)
 	case LOADOFFSET:
-		return fmt.Sprintf("LOADOFFSET %v", o.VarParam)
+		return fmt.Sprintf("LOADOFFSET %v", o.IntParam)
 	case LOADSTATIC:
-		return fmt.Sprintf("LOADSTATIC %v", o.VarParam)
+		return fmt.Sprintf("LOADSTATIC %v", o.IntParam)
 	case PUSH:
 		return fmt.Sprintf("PUSH %v", o.IntParam)
 	case AND:
@@ -90,7 +89,7 @@ func (o Op) String() string {
 	case AT:
 		return "AT"
 	case IN:
-		return fmt.Sprintf("IN %v", o.VarParam)
+		return fmt.Sprintf("IN %v", o.IntParam)
 	case OF:
 		return fmt.Sprintf("OF %v", o.IntParam)
 	case MOVR:
@@ -119,7 +118,7 @@ const (
 	R3
 )
 
-func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64) (int64, error) {
+func Eval(rule *CompiledRule, matches []*[]int, static []int64) (int64, error) {
 
 	index := 0
 	var ret int64
@@ -177,7 +176,7 @@ func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64
 			regs[3] = 0
 
 		case LOADCOUNT:
-			if lst, ok := matches[cur.VarParam]; ok {
+			if lst := matches[cur.IntParam]; lst != nil {
 				push(int64(len(*lst)))
 			} else {
 				push(0)
@@ -186,7 +185,7 @@ func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64
 		case LOADOFFSET:
 			index := pop()
 
-			if lst, ok := matches[cur.VarParam]; ok {
+			if lst := matches[cur.IntParam]; lst != nil {
 				if int(index) < len(*lst) {
 					push(int64((*lst)[index]))
 				} else {
@@ -197,8 +196,8 @@ func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64
 			}
 
 		case LOADSTATIC:
-			if n, ok := static[cur.VarParam]; ok {
-				push(n)
+			if int(cur.IntParam) < len(static) {
+				push(static[int(cur.IntParam)])
 			} else {
 				push(0)
 			}
@@ -344,7 +343,7 @@ func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64
 		case AT:
 			right = pop()
 
-			if lst, ok := matches[cur.VarParam]; ok {
+			if lst := matches[cur.IntParam]; lst != nil {
 				result := 0
 				for _, index := range *lst {
 					if index == int(right) {
@@ -364,7 +363,7 @@ func Eval(rule *CompiledRule, matches map[string]*[]int, static map[string]int64
 			// low value in range
 			left = pop()
 
-			if lst, ok := matches[cur.VarParam]; ok {
+			if lst := matches[cur.IntParam]; lst != nil {
 				result := 0
 				for _, index := range *lst {
 					if index > int(left) && index < int(right) {

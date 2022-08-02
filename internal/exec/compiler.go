@@ -12,6 +12,16 @@ import (
 	"github.com/kgwinnup/go-yara/internal/parser"
 )
 
+type Pattern struct {
+	Name string
+	// pattern to be used in the automta
+	Pattern []byte
+	// what rule this pattern is tied to.
+	Rule       string
+	Nocase     bool
+	MatchIndex int
+}
+
 type CompiledRule struct {
 	instr    []Op
 	deps     []string
@@ -30,14 +40,15 @@ type CompiledRules struct {
 	// stores a Pattern object by its RuleName_Var key
 	// this is used when evaluating the condition. Each pattern
 	// contains information about the indexes within the input bytes
-	mappings       map[string]Pattern
+	mappings       map[string]*Pattern
 	automata       []*ACNode
 	automataNocase []*ACNode
+	patternCount   int
 
 	// this is to hold variable names to register value. Hacky, i
 	// know.
 	tempVars map[string]int64
-	tempVar  string
+	tempVar  int64
 }
 
 func (c *CompiledRules) Debug() {
@@ -52,12 +63,12 @@ func (c *CompiledRules) Debug() {
 
 	fmt.Println("patterns")
 	for _, pattern := range c.mappings {
-		bs := pattern.Pattern()
+		bs := pattern.Pattern
 		bs2 := ""
 		for _, b := range bs {
 			bs2 += fmt.Sprintf("%x ", b)
 		}
-		fmt.Printf("    %v = %v\n", pattern.Name(), bs2)
+		fmt.Printf("    %v: %v = %v\n", pattern.MatchIndex, pattern.Name, bs2)
 	}
 }
 
@@ -68,10 +79,10 @@ func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 
 	output := make([]*ScanOutput, 0)
 
-	matches := make(map[string]*[]int)
+	matches := make([]*[]int, c.patternCount)
 
-	global := make(map[string]int64)
-	global["filesize"] = int64(len(input))
+	static := make([]int64, 0)
+	static = append(static, int64(len(input)))
 
 	for i, b := range input {
 		// get the next node in the automata and return a list of
@@ -81,7 +92,7 @@ func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 	}
 
 	for _, rule := range c.rules {
-		out, err := Eval(rule, matches, global)
+		out, err := Eval(rule, matches, static)
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +105,7 @@ func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 
 			// add this rule to the global state for other rules to
 			// reference
-			c.mappings[rule.name] = NewConstantPattern(rule.name, int(out))
+			//static[rule.name] = int64(out)
 		}
 	}
 
@@ -121,13 +132,17 @@ func Compile(input string) (*CompiledRules, error) {
 
 	compiled := &CompiledRules{
 		rules:    make([]*CompiledRule, 0),
-		mappings: make(map[string]Pattern),
+		mappings: make(map[string]*Pattern),
 		tempVars: make(map[string]int64),
 	}
 
-	patterns := make([]Pattern, 0)
-	patternsNocase := make([]Pattern, 0)
-	dups := make(map[string]Pattern)
+	patterns := make([]*Pattern, 0)
+	patternsNocase := make([]*Pattern, 0)
+	dups := make(map[string]*Pattern)
+
+	// index where each pattern will be in the match structure when
+	// evaluated
+	index := 0
 
 	for _, rule := range rules {
 		compiledRule := &CompiledRule{
@@ -155,7 +170,15 @@ func Compile(input string) (*CompiledRules, error) {
 							bytePattern.Patterns[0][i] = toLower(bytePattern.Patterns[0][i])
 						}
 					}
-					temp := NewStringPattern(assign.Left, rule.Name, bytePattern.Nocase, bytePattern.Patterns[0])
+
+					temp := &Pattern{
+						Name:       fmt.Sprintf("%v_%v", rule.Name, assign.Left),
+						Rule:       rule.Name,
+						Nocase:     bytePattern.Nocase,
+						Pattern:    bytePattern.Patterns[0],
+						MatchIndex: index,
+					}
+					index++
 
 					// check if the pattern is identical to another existing pattern. If
 					// so add a pointer with this patterns name to point to the existing
@@ -163,7 +186,7 @@ func Compile(input string) (*CompiledRules, error) {
 					// automaton.
 					pattern, ok := dups[hash]
 					if ok {
-						compiled.mappings[temp.Name()] = pattern
+						compiled.mappings[temp.Name] = pattern
 					} else {
 						dups[hash] = temp
 
@@ -173,7 +196,7 @@ func Compile(input string) (*CompiledRules, error) {
 							patterns = append(patterns, temp)
 						}
 
-						compiled.mappings[temp.Name()] = temp
+						compiled.mappings[temp.Name] = temp
 					}
 
 				} else {
@@ -198,6 +221,7 @@ func Compile(input string) (*CompiledRules, error) {
 	// build the automta
 	compiled.automata = ACBuild(patterns)
 	compiled.automataNocase = ACBuild(patternsNocase)
+	compiled.patternCount = index
 
 	return compiled, nil
 }
@@ -263,7 +287,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			c.compileNode(ruleName, infix.Right, accum)
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
-				push(Op{OpCode: IN, VarParam: name})
+				push(Op{OpCode: IN, IntParam: int64(c.mappings[name].MatchIndex)})
 			} else {
 				return errors.New(fmt.Sprintf("compiler: invalid IN operation, left value must be a variable"))
 			}
@@ -274,7 +298,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 				names := c.patternsInRule(ruleName)
 				for _, name := range names {
-					push(Op{OpCode: LOADCOUNT, VarParam: name})
+					push(Op{OpCode: LOADCOUNT, IntParam: int64(c.mappings[name].MatchIndex)})
 				}
 			} else {
 				c.compileNode(ruleName, infix.Right, accum)
@@ -304,7 +328,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 				c.compileNode(ruleName, infix.Right, accum)
 
 				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
-				push(Op{OpCode: LOADOFFSET, VarParam: name})
+				push(Op{OpCode: LOADOFFSET, IntParam: int64(c.mappings[name].MatchIndex)})
 
 				return nil
 
@@ -345,7 +369,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		case lexer.AT:
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
-				push(Op{OpCode: AT, VarParam: name})
+				push(Op{OpCode: AT, IntParam: int64(c.mappings[name].MatchIndex)})
 			} else {
 				return errors.New(fmt.Sprintf("compiler: invalid AT operation, left value must be a variable"))
 			}
@@ -393,7 +417,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			for _, name := range c.patternsInRule(ruleName) {
 				if strings.HasPrefix(name, prefix) {
 					count++
-					push(Op{OpCode: LOADCOUNT, VarParam: name})
+					push(Op{OpCode: LOADCOUNT, IntParam: int64(c.mappings[name].MatchIndex)})
 				}
 			}
 
@@ -404,18 +428,18 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			if len(v.Value) > 1 {
 				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
 				push(Op{OpCode: PUSH, IntParam: 0})
-				push(Op{OpCode: LOADOFFSET, VarParam: name})
+				push(Op{OpCode: LOADOFFSET, IntParam: int64(c.mappings[name].MatchIndex)})
 			} else {
 				push(Op{OpCode: PUSH, IntParam: 0})
-				push(Op{OpCode: LOADOFFSET, VarParam: c.tempVar})
+				push(Op{OpCode: LOADOFFSET, IntParam: c.tempVar})
 			}
 		} else {
 			if len(v.Value) > 1 {
 				name := fmt.Sprintf("%v_%v", ruleName, v.Value)
-				push(Op{OpCode: LOADCOUNT, VarParam: name})
+				push(Op{OpCode: LOADCOUNT, IntParam: int64(c.mappings[name].MatchIndex)})
 			} else {
 				push(Op{OpCode: PUSH, IntParam: 0})
-				push(Op{OpCode: LOADCOUNT, VarParam: c.tempVar})
+				push(Op{OpCode: LOADCOUNT, IntParam: c.tempVar})
 			}
 		}
 
@@ -425,7 +449,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 	if keyword, ok := node.(*ast.Keyword); ok {
 		switch keyword.Token.Type {
 		case lexer.FILESIZE:
-			push(Op{OpCode: LOADSTATIC, VarParam: keyword.Value})
+			push(Op{OpCode: LOADSTATIC, IntParam: 0})
 		default:
 			return errors.New(fmt.Sprintf("compiler: invalid keyword: %v", keyword.Value))
 		}
@@ -482,7 +506,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			push(Op{OpCode: MOVR, IntParam: R3})
 
 			for _, name := range names {
-				c.tempVar = name
+				c.tempVar = int64(c.mappings[name].MatchIndex)
 				c.compileNode(ruleName, loop.Body, accum)
 				push(Op{OpCode: ADDR, IntParam: R2})
 			}
@@ -496,7 +520,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 
 			for _, name := range c.patternsInRule(ruleName) {
 
-				c.tempVar = name
+				c.tempVar = int64(c.mappings[name].MatchIndex)
 				c.compileNode(ruleName, loop.Body, accum)
 				push(Op{OpCode: ADDR, IntParam: R2})
 			}

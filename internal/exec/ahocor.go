@@ -9,11 +9,10 @@ type ACNode struct {
 	match       int
 	// index in the current pattern, used for partial compares if
 	// access to the start of the pattern is needed.
-	matchIndex int
-	pattern    Pattern
+	matchOffset int
 }
 
-func ACBuild(patterns []Pattern) []*ACNode {
+func ACBuild(patterns []*Pattern) []*ACNode {
 
 	nodes := make([]*ACNode, 0)
 
@@ -24,8 +23,7 @@ func ACBuild(patterns []Pattern) []*ACNode {
 		fail:        nil,
 		alternative: nil,
 		match:       -1,
-		matchIndex:  0,
-		pattern:     nil,
+		matchOffset: 0,
 	}
 
 	nodes = append(nodes, root)
@@ -33,16 +31,16 @@ func ACBuild(patterns []Pattern) []*ACNode {
 	cur := root
 	ids := 1
 
-	for i, pattern := range patterns {
+	for _, pattern := range patterns {
 		cur = root
 
-		bs := pattern.Pattern()
+		bs := pattern.Pattern
 		for j, b := range bs {
 
 			if node, ok := cur.children[b]; ok {
 
 				if j == len(bs)-1 {
-					node.match = i
+					node.match = pattern.MatchIndex
 				}
 
 				cur = node
@@ -50,20 +48,19 @@ func ACBuild(patterns []Pattern) []*ACNode {
 			}
 
 			node := &ACNode{
-				id:         ids,
-				data:       b,
-				children:   make(map[byte]*ACNode),
-				fail:       nil,
-				match:      -1,
-				matchIndex: j,
-				pattern:    pattern,
+				id:          ids,
+				data:        b,
+				children:    make(map[byte]*ACNode),
+				fail:        nil,
+				match:       -1,
+				matchOffset: j,
 			}
 
 			nodes = append(nodes, node)
 			ids++
 
 			if j == len(bs)-1 {
-				node.match = i
+				node.match = pattern.MatchIndex
 			}
 
 			cur.children[b] = node
@@ -130,7 +127,7 @@ func ACBuild(patterns []Pattern) []*ACNode {
 
 // ACNext will perform a single byte transition of the automata,
 // returning any indexes where a pattern is hit
-func ACNext(matches map[string]*[]int, nodes []*ACNode, index int, b byte, bindex int) int {
+func ACNext(matches []*[]int, nodes []*ACNode, index int, b byte, bindex int) int {
 
 	node := nodes[index]
 
@@ -145,10 +142,10 @@ Start:
 
 		// check if this node completes a match
 		if node.match >= 0 {
-			if lst, ok := matches[node.pattern.Name()]; ok {
-				*lst = append(*lst, bindex-node.matchIndex)
+			if lst := matches[node.match]; lst != nil {
+				*lst = append(*lst, bindex-node.matchOffset)
 			} else {
-				matches[node.pattern.Name()] = &[]int{bindex - node.matchIndex}
+				matches[node.match] = &[]int{bindex - node.matchOffset}
 			}
 		}
 
@@ -159,10 +156,10 @@ Start:
 				break
 			}
 
-			if lst, ok := matches[node.pattern.Name()]; ok {
-				*lst = append(*lst, bindex-node.matchIndex)
+			if lst := matches[node.match]; lst != nil {
+				*lst = append(*lst, bindex-node.matchOffset)
 			} else {
-				matches[node.pattern.Name()] = &[]int{bindex - node.matchIndex}
+				matches[node.match] = &[]int{bindex - node.matchOffset}
 			}
 
 			temp = temp.alternative

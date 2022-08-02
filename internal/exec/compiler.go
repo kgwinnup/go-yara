@@ -40,11 +40,12 @@ type CompiledRules struct {
 	// stores a Pattern object by its RuleName_Var key
 	// this is used when evaluating the condition. Each pattern
 	// contains information about the indexes within the input bytes
-	mappings       map[string]*Pattern
-	automata       []*ACNode
-	automataNocase []*ACNode
-	patternCount   int
-
+	mappings            map[string]*Pattern
+	automata            []*ACNode
+	automataNocase      []*ACNode
+	automataCount       int
+	automataNocaseCount int
+	patternCount        int
 	// this is to hold variable names to register value. Hacky, i
 	// know.
 	tempVars map[string]int64
@@ -74,9 +75,6 @@ func (c *CompiledRules) Debug() {
 
 func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 
-	nodeId := 0
-	nodeIdNocase := 0
-
 	output := make([]*ScanOutput, 0)
 
 	matches := make([]*[]int, c.patternCount)
@@ -84,11 +82,14 @@ func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
 	static := make([]int64, 0)
 	static = append(static, int64(len(input)))
 
-	for i, b := range input {
-		// get the next node in the automata and return a list of
-		// matches indexed the same as the patterns slice
-		nodeId = ACNext(matches, c.automata, nodeId, b, i)
-		nodeIdNocase = ACNext(matches, c.automataNocase, nodeIdNocase, toLower(b), i)
+	// get the next node in the automata and return a list of
+	// matches indexed the same as the patterns slice
+	if c.automataCount > 0 {
+		ACNext(matches, c.automata, input, false)
+	}
+
+	if c.automataNocaseCount > 0 {
+		ACNext(matches, c.automataNocase, input, true)
 	}
 
 	for _, rule := range c.rules {
@@ -167,7 +168,7 @@ func Compile(input string) (*CompiledRules, error) {
 				if _, ok := assign.Right.(*ast.String); ok {
 					if bytePattern.Nocase {
 						for i := 0; i < len(bytePattern.Patterns[0]); i++ {
-							bytePattern.Patterns[0][i] = toLower(bytePattern.Patterns[0][i])
+							bytePattern.Patterns[0][i] = ToLower(bytePattern.Patterns[0][i])
 						}
 					}
 
@@ -219,14 +220,22 @@ func Compile(input string) (*CompiledRules, error) {
 	}
 
 	// build the automta
-	compiled.automata = ACBuild(patterns)
-	compiled.automataNocase = ACBuild(patternsNocase)
+	if len(patterns) > 0 {
+		compiled.automata = ACBuild(patterns)
+		compiled.automataCount = len(patterns)
+	}
+
+	if len(patternsNocase) > 0 {
+		compiled.automataNocase = ACBuild(patternsNocase)
+		compiled.automataNocaseCount = len(patternsNocase)
+	}
+
 	compiled.patternCount = index
 
 	return compiled, nil
 }
 
-func toLower(b byte) byte {
+func ToLower(b byte) byte {
 	if b >= 0x41 && b <= 0x5a {
 		return b | 0x20
 	}

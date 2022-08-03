@@ -112,9 +112,9 @@ func (o Op) String() string {
 
 const (
 	RC = iota
-	R1
-	R2
-	R3
+	REG1
+	REG2
+	REG3
 )
 
 func Eval(rule *CompiledRule, matches []*[]int, static []int64) (int64, error) {

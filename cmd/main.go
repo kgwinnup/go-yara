@@ -58,7 +58,7 @@ func main() {
 			continue
 		}
 
-		output, err := yara.Scan(contents, *showString)
+		output, err := yara.Scan(contents, 3, *showString)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			continue

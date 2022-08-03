@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kgwinnup/go-yara/internal/ast"
 	"github.com/kgwinnup/go-yara/internal/lexer"
@@ -50,6 +51,7 @@ type CompiledRules struct {
 	// know.
 	tempVars map[string]int64
 	tempVar  int64
+	tempChan chan int
 }
 
 func (c *CompiledRules) Debug() {
@@ -73,23 +75,33 @@ func (c *CompiledRules) Debug() {
 	}
 }
 
-func (c *CompiledRules) Scan(input []byte, s bool) ([]*ScanOutput, error) {
+func (c *CompiledRules) Scan(input []byte, s bool, timeout int) ([]*ScanOutput, error) {
 
 	output := make([]*ScanOutput, 0)
-
 	matches := make([]*[]int, c.patternCount)
 
 	static := make([]int64, 0)
 	static = append(static, int64(len(input)))
 
+	done := false
+
 	// get the next node in the automata and return a list of
 	// matches indexed the same as the patterns slice
-	if c.automataCount > 0 {
-		ACNext(matches, c.automata, input, false)
-	}
+	go func() {
+		if c.automataCount > 0 {
+			ACNext(matches, c.automata, input, false, &done)
+		}
 
-	if c.automataNocaseCount > 0 {
-		ACNext(matches, c.automataNocase, input, true)
+		if c.automataNocaseCount > 0 {
+			ACNext(matches, c.automataNocase, input, true, &done)
+		}
+		c.tempChan <- 1
+	}()
+
+	select {
+	case _ = <-c.tempChan:
+	case <-time.After(time.Duration(timeout) * time.Second):
+		done = true
 	}
 
 	for _, rule := range c.rules {
@@ -135,6 +147,7 @@ func Compile(input string) (*CompiledRules, error) {
 		rules:    make([]*CompiledRule, 0),
 		mappings: make(map[string]*Pattern),
 		tempVars: make(map[string]int64),
+		tempChan: make(chan int, 1),
 	}
 
 	patterns := make([]*Pattern, 0)
@@ -487,12 +500,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 		if infix, ok := loop.StringSet.(*ast.Infix); ok && infix.Token.Type == lexer.RANGE && loop.Var != "" {
 			// set loop.Var
 			c.compileNode(ruleName, infix.Left, instructions)
-			push1(MOVR, R1)
+			push1(MOVR, REG1)
 
 			// save a total size for the ALL matching posibility
 			c.compileNode(ruleName, infix.Left, instructions)
-			push1(MOVR, R3)
-			c.tempVars[loop.Var] = R1
+			push1(MOVR, REG3)
+			c.tempVars[loop.Var] = REG1
 
 			// get the accumulator counter, loop checks this register
 			c.compileNode(ruleName, infix.Right, instructions)
@@ -506,38 +519,38 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			c.compileNode(ruleName, loop.Body, instructions)
 
 			// handle the loop
-			push1(INCR, R1)
-			push1(ADDR, R2)
+			push1(INCR, REG1)
+			push1(ADDR, REG2)
 			push1(LOOP, startAddress)
-			push1(PUSHR, R2)
+			push1(PUSHR, REG2)
 
 		} else if set, ok := loop.StringSet.(*ast.Set); ok {
 			names := c.setToStringSlice(ruleName, set)
 
 			push1(PUSH, int64(len(names)))
-			push1(MOVR, R3)
+			push1(MOVR, REG3)
 
 			for _, name := range names {
 				c.tempVar = int64(c.mappings[name].MatchIndex)
 				c.compileNode(ruleName, loop.Body, instructions)
-				push1(ADDR, R2)
+				push1(ADDR, REG2)
 			}
 
-			push1(PUSHR, R2)
+			push1(PUSHR, REG2)
 
 		} else if keyword, ok := loop.StringSet.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 
 			push1(PUSH, int64(len(c.patternsInRule(ruleName))))
-			push1(MOVR, R3)
+			push1(MOVR, REG3)
 
 			for _, name := range c.patternsInRule(ruleName) {
 
 				c.tempVar = int64(c.mappings[name].MatchIndex)
 				c.compileNode(ruleName, loop.Body, instructions)
-				push1(ADDR, R2)
+				push1(ADDR, REG2)
 			}
 
-			push1(PUSHR, R2)
+			push1(PUSHR, REG2)
 
 		} else {
 			return errors.New("compiler: loop structure not implemented")
@@ -552,7 +565,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 				return err
 			}
 		} else if loop.Expr.Type == lexer.ALL {
-			push1(PUSHR, R3)
+			push1(PUSHR, REG3)
 			push(EQUAL)
 		} else if loop.Expr.Type == lexer.ANY {
 			push1(PUSH, 1)

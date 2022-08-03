@@ -135,11 +135,15 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 
 // ACNext will perform a single byte transition of the automata,
 // returning any indexes where a pattern is hit
-func ACNext(matches []*[]int, nodes []*ACNode, input []byte, nocase bool) {
+func ACNext(matches []*[]int, nodes []*ACNode, input []byte, nocase bool, done *bool) {
 
 	node := nodes[0]
 
 	for i := 0; i < len(input); i++ {
+		if i%0x20 == 0 && *done {
+			break
+		}
+
 		b := input[i]
 		if nocase {
 			b = ToLower(b)

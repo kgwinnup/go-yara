@@ -10,7 +10,7 @@ func testCompile(rule string, input string) ([]*ScanOutput, error) {
 		return nil, err
 	}
 
-	out, err := compiled.Scan([]byte(input), false)
+	out, err := compiled.Scan([]byte(input), false, 3)
 	if err != nil {
 		return nil, err
 	}

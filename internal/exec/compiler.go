@@ -281,10 +281,13 @@ func (c *CompiledRules) setToStringSlice(ruleName string, set *ast.Set) []string
 // instruction sequence for evaluation.
 // in general, I am unhappy with this function, super messy, but the
 // operation are simple and the code isn't that long so...
-func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op) error {
+func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions *[]Op) error {
 
-	push := func(op Op) {
-		*accum = append(*accum, op)
+	push := func(op int) {
+		*instructions = append(*instructions, Op{OpCode: op})
+	}
+	push1 := func(op int, param int64) {
+		*instructions = append(*instructions, Op{OpCode: op, IntParam: param})
 	}
 
 	if infix, ok := node.(*ast.Infix); ok {
@@ -293,10 +296,10 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		// as a single instruction. Intercept here and process accordingly.
 		switch infix.Token.Type {
 		case lexer.IN:
-			c.compileNode(ruleName, infix.Right, accum)
+			c.compileNode(ruleName, infix.Right, instructions)
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
-				push(Op{OpCode: IN, IntParam: int64(c.mappings[name].MatchIndex)})
+				push1(IN, int64(c.mappings[name].MatchIndex))
 			} else {
 				return errors.New(fmt.Sprintf("compiler: invalid IN operation, left value must be a variable"))
 			}
@@ -307,22 +310,22 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 				names := c.patternsInRule(ruleName)
 				for _, name := range names {
-					push(Op{OpCode: LOADCOUNT, IntParam: int64(c.mappings[name].MatchIndex)})
+					push1(LOADCOUNT, int64(c.mappings[name].MatchIndex))
 				}
 			} else {
-				c.compileNode(ruleName, infix.Right, accum)
+				c.compileNode(ruleName, infix.Right, instructions)
 			}
 
 			if integer, ok := infix.Left.(*ast.Integer); ok {
-				push(Op{OpCode: OF, IntParam: integer.Value})
+				push1(OF, integer.Value)
 			} else if keyword, ok := infix.Left.(*ast.Keyword); ok {
 				switch keyword.Token.Type {
 				case lexer.ALL:
-					*accum = append(*accum, Op{OpCode: OF, IntParam: int64(len(c.patternsInRule(ruleName)))})
+					push1(OF, int64(len(c.patternsInRule(ruleName))))
 				case lexer.ANY:
-					*accum = append(*accum, Op{OpCode: OF, IntParam: 1})
+					push1(OF, 1)
 				case lexer.NONE:
-					*accum = append(*accum, Op{OpCode: OF, IntParam: 0})
+					push1(OF, 0)
 				default:
 					return errors.New(fmt.Sprintf("compiler: invalid OF operation, left value must be a integer, 'all', or 'any'"))
 				}
@@ -334,10 +337,10 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 
 		case lexer.LBRACKET:
 			if v, ok := infix.Left.(*ast.Variable); ok {
-				c.compileNode(ruleName, infix.Right, accum)
+				c.compileNode(ruleName, infix.Right, instructions)
 
 				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
-				push(Op{OpCode: LOADOFFSET, IntParam: int64(c.mappings[name].MatchIndex)})
+				push1(LOADOFFSET, int64(c.mappings[name].MatchIndex))
 
 				return nil
 
@@ -348,37 +351,37 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		}
 
 		// recurse the left and right branches and push those instructions onto the sequence.
-		c.compileNode(ruleName, infix.Left, accum)
-		c.compileNode(ruleName, infix.Right, accum)
+		c.compileNode(ruleName, infix.Left, instructions)
+		c.compileNode(ruleName, infix.Right, instructions)
 
 		// handle the infix operation now that the left and right values are processed.
 		switch infix.Token.Type {
 		case lexer.PLUS:
-			push(Op{OpCode: ADD})
+			push(ADD)
 		case lexer.MINUS:
-			push(Op{OpCode: MINUS})
+			push(MINUS)
 		case lexer.AND:
-			push(Op{OpCode: AND})
+			push(AND)
 		case lexer.OR:
-			push(Op{OpCode: OR})
+			push(OR)
 		case lexer.GT:
-			push(Op{OpCode: GT})
+			push(GT)
 		case lexer.GTE:
-			push(Op{OpCode: GTE})
+			push(GTE)
 		case lexer.LT:
-			push(Op{OpCode: LT})
+			push(LT)
 		case lexer.LTE:
-			push(Op{OpCode: LTE})
+			push(LTE)
 		case lexer.EQUAL:
-			push(Op{OpCode: EQUAL})
+			push(EQUAL)
 		case lexer.NOTEQUAL:
-			push(Op{OpCode: NOTEQUAL})
+			push(NOTEQUAL)
 		case lexer.RANGE:
 			// NOP for now, the two values should be pushed on the stack
 		case lexer.AT:
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
-				push(Op{OpCode: AT, IntParam: int64(c.mappings[name].MatchIndex)})
+				push1(AT, int64(c.mappings[name].MatchIndex))
 			} else {
 				return errors.New(fmt.Sprintf("compiler: invalid AT operation, left value must be a variable"))
 			}
@@ -392,19 +395,19 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 
 	if set, ok := node.(*ast.Set); ok {
 		for _, node := range set.Nodes {
-			c.compileNode(ruleName, node, accum)
+			c.compileNode(ruleName, node, instructions)
 		}
 
 		// finally push the number of nodes pushed onto the stack
-		push(Op{OpCode: PUSH, IntParam: int64(len(set.Nodes))})
+		push1(PUSH, int64(len(set.Nodes)))
 	}
 
 	if prefix, ok := node.(*ast.Prefix); ok {
-		c.compileNode(ruleName, prefix.Right, accum)
+		c.compileNode(ruleName, prefix.Right, instructions)
 
 		switch prefix.Token.Type {
 		case lexer.MINUS:
-			push(Op{OpCode: MINUSU})
+			push(MINUSU)
 		default:
 			return errors.New(fmt.Sprintf("compiler: invalid prefix operation: %v", prefix.Type()))
 		}
@@ -426,29 +429,29 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 			for _, name := range c.patternsInRule(ruleName) {
 				if strings.HasPrefix(name, prefix) {
 					count++
-					push(Op{OpCode: LOADCOUNT, IntParam: int64(c.mappings[name].MatchIndex)})
+					push1(LOADCOUNT, int64(c.mappings[name].MatchIndex))
 				}
 			}
 
 			// finally push the number of nodes pushed onto the stack
-			push(Op{OpCode: PUSH, IntParam: int64(count)})
+			push1(PUSH, int64(count))
 
 		} else if strings.HasPrefix(v.Value, "@") {
 			if len(v.Value) > 1 {
 				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
-				push(Op{OpCode: PUSH, IntParam: 0})
-				push(Op{OpCode: LOADOFFSET, IntParam: int64(c.mappings[name].MatchIndex)})
+				push1(PUSH, 0)
+				push1(LOADOFFSET, int64(c.mappings[name].MatchIndex))
 			} else {
-				push(Op{OpCode: PUSH, IntParam: 0})
-				push(Op{OpCode: LOADOFFSET, IntParam: c.tempVar})
+				push1(PUSH, 0)
+				push1(LOADOFFSET, c.tempVar)
 			}
 		} else {
 			if len(v.Value) > 1 {
 				name := fmt.Sprintf("%v_%v", ruleName, v.Value)
-				push(Op{OpCode: LOADCOUNT, IntParam: int64(c.mappings[name].MatchIndex)})
+				push1(LOADCOUNT, int64(c.mappings[name].MatchIndex))
 			} else {
-				push(Op{OpCode: PUSH, IntParam: 0})
-				push(Op{OpCode: LOADCOUNT, IntParam: c.tempVar})
+				push1(PUSH, 0)
+				push1(LOADCOUNT, c.tempVar)
 			}
 		}
 
@@ -458,83 +461,83 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 	if keyword, ok := node.(*ast.Keyword); ok {
 		switch keyword.Token.Type {
 		case lexer.FILESIZE:
-			push(Op{OpCode: LOADSTATIC, IntParam: 0})
+			push1(LOADSTATIC, 0)
 		default:
 			return errors.New(fmt.Sprintf("compiler: invalid keyword: %v", keyword.Value))
 		}
 	}
 
 	if n, ok := node.(*ast.Integer); ok {
-		push(Op{OpCode: PUSH, IntParam: n.Value})
+		push1(PUSH, n.Value)
 		return nil
 	}
 
 	if ident, ok := node.(*ast.Identity); ok {
 		if n, ok := c.tempVars[ident.Value]; ok {
-			push(Op{OpCode: PUSHR, IntParam: n})
+			push1(PUSHR, n)
 		} else {
 			return errors.New("compiler: invalid variable to create instruction")
 		}
 	}
 
 	if loop, ok := node.(*ast.For); ok {
-		push(Op{OpCode: CLEAR})
+		push(CLEAR)
 
 		// for _ loop.Var in (X..Y) : _
 		if infix, ok := loop.StringSet.(*ast.Infix); ok && infix.Token.Type == lexer.RANGE && loop.Var != "" {
 			// set loop.Var
-			c.compileNode(ruleName, infix.Left, accum)
-			push(Op{OpCode: MOVR, IntParam: R1})
+			c.compileNode(ruleName, infix.Left, instructions)
+			push1(MOVR, R1)
 
 			// save a total size for the ALL matching posibility
-			c.compileNode(ruleName, infix.Left, accum)
-			push(Op{OpCode: MOVR, IntParam: R3})
+			c.compileNode(ruleName, infix.Left, instructions)
+			push1(MOVR, R3)
 			c.tempVars[loop.Var] = R1
 
 			// get the accumulator counter, loop checks this register
-			c.compileNode(ruleName, infix.Right, accum)
-			c.compileNode(ruleName, infix.Left, accum)
-			push(Op{OpCode: MINUS})
-			push(Op{OpCode: MOVR, IntParam: RC})
+			c.compileNode(ruleName, infix.Right, instructions)
+			c.compileNode(ruleName, infix.Left, instructions)
+			push(MINUS)
+			push1(MOVR, RC)
 
-			startAddress := int64(len(*accum))
+			startAddress := int64(len(*instructions))
 
 			// do body
-			c.compileNode(ruleName, loop.Body, accum)
+			c.compileNode(ruleName, loop.Body, instructions)
 
 			// handle the loop
-			push(Op{OpCode: INCR, IntParam: R1})
-			push(Op{OpCode: ADDR, IntParam: R2})
-			push(Op{OpCode: LOOP, IntParam: startAddress})
-			push(Op{OpCode: PUSHR, IntParam: R2})
+			push1(INCR, R1)
+			push1(ADDR, R2)
+			push1(LOOP, startAddress)
+			push1(PUSHR, R2)
 
 		} else if set, ok := loop.StringSet.(*ast.Set); ok {
 			names := c.setToStringSlice(ruleName, set)
 
-			push(Op{OpCode: PUSH, IntParam: int64(len(names))})
-			push(Op{OpCode: MOVR, IntParam: R3})
+			push1(PUSH, int64(len(names)))
+			push1(MOVR, R3)
 
 			for _, name := range names {
 				c.tempVar = int64(c.mappings[name].MatchIndex)
-				c.compileNode(ruleName, loop.Body, accum)
-				push(Op{OpCode: ADDR, IntParam: R2})
+				c.compileNode(ruleName, loop.Body, instructions)
+				push1(ADDR, R2)
 			}
 
-			push(Op{OpCode: PUSHR, IntParam: R2})
+			push1(PUSHR, R2)
 
 		} else if keyword, ok := loop.StringSet.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 
-			push(Op{OpCode: PUSH, IntParam: int64(len(c.patternsInRule(ruleName)))})
-			push(Op{OpCode: MOVR, IntParam: R3})
+			push1(PUSH, int64(len(c.patternsInRule(ruleName))))
+			push1(MOVR, R3)
 
 			for _, name := range c.patternsInRule(ruleName) {
 
 				c.tempVar = int64(c.mappings[name].MatchIndex)
-				c.compileNode(ruleName, loop.Body, accum)
-				push(Op{OpCode: ADDR, IntParam: R2})
+				c.compileNode(ruleName, loop.Body, instructions)
+				push1(ADDR, R2)
 			}
 
-			push(Op{OpCode: PUSHR, IntParam: R2})
+			push1(PUSHR, R2)
 
 		} else {
 			return errors.New("compiler: loop structure not implemented")
@@ -543,17 +546,17 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, accum *[]Op)
 		// now wrap up and finish the condition
 		if loop.Expr.Type == lexer.INTEGER {
 			if n, err := strconv.ParseInt(loop.Expr.Raw, 10, 64); err == nil {
-				push(Op{OpCode: PUSH, IntParam: n})
-				push(Op{OpCode: EQUAL})
+				push1(PUSH, n)
+				push(EQUAL)
 			} else {
 				return err
 			}
 		} else if loop.Expr.Type == lexer.ALL {
-			push(Op{OpCode: PUSHR, IntParam: R3})
-			push(Op{OpCode: EQUAL})
+			push1(PUSHR, R3)
+			push(EQUAL)
 		} else if loop.Expr.Type == lexer.ANY {
-			push(Op{OpCode: PUSH, IntParam: 1})
-			push(Op{OpCode: GTE})
+			push1(PUSH, 1)
+			push(GTE)
 		} else {
 			return errors.New(fmt.Sprintf("compiler: invalid loop expression: '%v'", loop.Expr))
 		}

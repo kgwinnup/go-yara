@@ -1,5 +1,7 @@
 # Pure Golang implementation of Yara 
 
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/kgwinnup/go-yara/yara)](https://pkg.go.dev/github.com/kgwinnup/go-yara/yara)
+
 The purpose of this project is primarily for backends written in
 Golang requiring Yara. Linking Yara in Golang is kind of annoying,
 both statically and dynamically. Additionally, when linking a C
@@ -20,8 +22,8 @@ parsers.
 - [x] lexer and parser
 - [x] virtual machine for evaluation 
 - [x] standard string pattern types
-- [ ] regex pattern types
 - [ ] bytes pattern types
+- [ ] regex pattern types
 - [ ] modules 
 
 # Differences with C Yara
@@ -65,7 +67,7 @@ if err != nil {
 	continue
 }
 
-output, err := yara.Scan(contents, true)
+output, err := yara.Scan(contents, 3, true)
 if err != nil {
 	fmt.Fprintf(os.Stderr, "%v\n", err)
 	continue

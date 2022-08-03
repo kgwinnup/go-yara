@@ -1,8 +1,11 @@
 # Pure Golang implementation of Yara 
 
 The purpose of this project is primarily for backends written in
-Golang requiring Yara. Statically compiling Yara is doable but is a
-pain, and it muddies up the Golang build pipeline.
+Golang requiring Yara. Linking Yara in Golang is kind of annoying,
+both statically and dynamically. Additionally, when linking a C
+library in Golang there is a little overhead in calling the C library
+code. As a result (at least in my testing), this pure Golang version
+is about 12% faster than the linking the C library.
 
 My primary use case is matching against text files so the focus is on
 getting that feature compatible first, and of course the condition

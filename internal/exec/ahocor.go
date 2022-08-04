@@ -3,7 +3,7 @@ package exec
 type ACNode struct {
 	id          int
 	data        byte
-	children    []*ACNode
+	children    [256]*ACNode
 	fail        *ACNode
 	alternative *ACNode
 	match       int
@@ -19,7 +19,7 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 	root := &ACNode{
 		id:          0,
 		data:        0,
-		children:    make([]*ACNode, 256),
+		children:    [256]*ACNode{},
 		fail:        nil,
 		alternative: nil,
 		match:       -1,
@@ -50,18 +50,18 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 			node := &ACNode{
 				id:          ids,
 				data:        b,
-				children:    make([]*ACNode, 256),
+				children:    [256]*ACNode{},
 				fail:        nil,
 				match:       -1,
 				matchOffset: j,
 			}
 
-			nodes = append(nodes, node)
-			ids++
-
 			if j == len(bs)-1 {
 				node.match = pattern.MatchIndex
 			}
+
+			nodes = append(nodes, node)
+			ids++
 
 			cur.children[b] = node
 			cur = node

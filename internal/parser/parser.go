@@ -714,6 +714,8 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 
 	stack := make([]int, 0)
 
+	inRange := false
+
 	for {
 		tok, _ := p.lexer.Peek()
 
@@ -731,7 +733,29 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 		}
 
 		switch tok.Type {
-		case lexer.LPAREN, lexer.LBRACKET:
+		case lexer.PIPE, lexer.LBRACKET, lexer.RBRACKET, lexer.LPAREN, lexer.RPAREN:
+		default:
+			if len(tok.Raw) == 1 && !inRange {
+				temp, err := p.lexer.Next()
+				if err != nil {
+					return nil, err
+				}
+
+				if len(temp.Raw) != 1 {
+					return nil, errors.New("expecting 2 chars per byte")
+				}
+
+				tok.Raw += temp.Raw
+			}
+		}
+
+		switch tok.Type {
+		case lexer.LPAREN:
+			stack = append([]int{tok.Type}, stack...)
+			bytes = append(bytes, tok.Raw)
+
+		case lexer.LBRACKET:
+			inRange = true
 			stack = append([]int{tok.Type}, stack...)
 			bytes = append(bytes, tok.Raw)
 
@@ -744,6 +768,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 			}
 
 		case lexer.RBRACKET:
+			inRange = false
 			if stack[0] == lexer.LBRACKET {
 				stack = stack[1:]
 				bytes = append(bytes, tok.Raw)

@@ -293,3 +293,21 @@ func TestRuleBytes2(t *testing.T) {
 	}
 
 }
+
+func TestRuleBytes3(t *testing.T) {
+
+	rule := `rule Foobar : Tag1 {
+    strings:
+        $s1 = { 68 65 6c 6c 6f } 
+    condition:
+        $s1
+}
+`
+	input := "hello"
+	out, _ := testCompile(rule, input)
+
+	if len(out) == 0 {
+		t.Fatal("patterns failed to match")
+	}
+
+}

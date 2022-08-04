@@ -17,17 +17,13 @@ type Pattern struct {
 	// pattern to be used in the automta
 	Pattern []byte
 	// what rule this pattern is tied to.
-	Rule       string
-	Nocase     bool
 	MatchIndex int
 }
 
 type CompiledRule struct {
-	instr    []Op
-	deps     []string
-	finished bool
-	tags     []string
-	name     string
+	instr []Op
+	tags  []string
+	name  string
 }
 
 type ScanOutput struct {
@@ -146,11 +142,9 @@ func Compile(input string) (*CompiledRules, error) {
 
 	for _, rule := range rules {
 		compiledRule := &CompiledRule{
-			instr:    make([]Op, 0),
-			deps:     make([]string, 0),
-			finished: false,
-			tags:     rule.Tags,
-			name:     rule.Name,
+			instr: make([]Op, 0),
+			tags:  rule.Tags,
+			name:  rule.Name,
 		}
 
 		// add string patterns to the ahocor pattern list
@@ -173,8 +167,6 @@ func Compile(input string) (*CompiledRules, error) {
 
 					temp := &Pattern{
 						Name:       fmt.Sprintf("%v_%v", rule.Name, assign.Left),
-						Rule:       rule.Name,
-						Nocase:     bytePattern.Nocase,
 						Pattern:    bytePattern.Patterns[0],
 						MatchIndex: index,
 					}

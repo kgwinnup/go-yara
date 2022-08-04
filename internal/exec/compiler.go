@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/kgwinnup/go-yara/internal/ast"
 	"github.com/kgwinnup/go-yara/internal/lexer"
@@ -51,7 +50,6 @@ type CompiledRules struct {
 	// know.
 	tempVars map[string]int64
 	tempVar  int64
-	tempChan chan int
 }
 
 func (c *CompiledRules) Debug() {
@@ -83,25 +81,14 @@ func (c *CompiledRules) Scan(input []byte, s bool, timeout int) ([]*ScanOutput, 
 	static := make([]int64, 0)
 	static = append(static, int64(len(input)))
 
-	done := false
-
 	// get the next node in the automata and return a list of
 	// matches indexed the same as the patterns slice
-	go func() {
-		if c.automataCount > 0 {
-			ACNext(matches, c.automata, input, false, &done)
-		}
+	if c.automataCount > 0 {
+		ACNext(matches, c.automata, input)
+	}
 
-		if c.automataNocaseCount > 0 {
-			ACNext(matches, c.automataNocase, input, true, &done)
-		}
-		c.tempChan <- 1
-	}()
-
-	select {
-	case _ = <-c.tempChan:
-	case <-time.After(time.Duration(timeout) * time.Second):
-		done = true
+	if c.automataNocaseCount > 0 {
+		ACNextNocase(matches, c.automataNocase, input)
 	}
 
 	for _, rule := range c.rules {
@@ -147,7 +134,6 @@ func Compile(input string) (*CompiledRules, error) {
 		rules:    make([]*CompiledRule, 0),
 		mappings: make(map[string]*Pattern),
 		tempVars: make(map[string]int64),
-		tempChan: make(chan int, 1),
 	}
 
 	patterns := make([]*Pattern, 0)

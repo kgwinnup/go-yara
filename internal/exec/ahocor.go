@@ -135,18 +135,79 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 
 // ACNext will perform a single byte transition of the automata,
 // returning any indexes where a pattern is hit
-func ACNext(matches []*[]int, nodes []*ACNode, input []byte, nocase bool, done *bool) {
+func ACNext(matches []*[]int, nodes []*ACNode, input []byte) {
 
 	node := nodes[0]
 
 	for i := 0; i < len(input); i++ {
-		if i%0x20 == 0 && *done {
-			break
-		}
-
 		b := input[i]
-		if nocase {
-			b = ToLower(b)
+		// check if there is a path
+		new := node.children[b]
+
+		// if there is a child node that matches the input
+		if new != nil {
+			// transition to the next node
+			node = new
+
+			// check if this node completes a match
+			if node.match >= 0 {
+				if lst := matches[node.match]; lst != nil {
+					*lst = append(*lst, i-node.matchOffset)
+				} else {
+					matches[node.match] = &[]int{i - node.matchOffset}
+				}
+			}
+
+			// jump to each alternative matching node if they exist
+			temp := node.alternative
+			for {
+				if temp == nil {
+					break
+				}
+
+				if lst := matches[node.match]; lst != nil {
+					*lst = append(*lst, i-node.matchOffset)
+				} else {
+					matches[node.match] = &[]int{i - node.matchOffset}
+				}
+
+				temp = temp.alternative
+			}
+
+		} else {
+
+			// jump to each failure node until a next matching
+			// transition node is found, or back at the root.
+			for {
+				ok := node.children[b] != nil
+
+				if node.id == 0 {
+					break
+				}
+
+				if ok {
+					break
+				}
+
+				node = node.fail
+			}
+
+			// rerun this input char again as we moved nodes
+			if node.children[b] != nil {
+				i--
+			}
+		}
+	}
+}
+
+func ACNextNocase(matches []*[]int, nodes []*ACNode, input []byte) {
+
+	node := nodes[0]
+
+	for i := 0; i < len(input); i++ {
+		b := input[i]
+		if b >= 0x41 && b <= 0x5a {
+			b = b | 0x20
 		}
 		// check if there is a path
 		new := node.children[b]

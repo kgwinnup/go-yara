@@ -201,7 +201,6 @@ func (b *Bytes) BytePattern() ([][]int, error) {
 			parts := make([][]int, 0)
 			temp := make([]int, 0)
 
-			//"ff", "ff", "(", "aa", "|", "bb", ")"
 			for j := i + 1; j < len(b.Items); j++ {
 
 				if b.Items[j] == ")" {
@@ -243,7 +242,6 @@ func (b *Bytes) BytePattern() ([][]int, error) {
 		}
 
 		for k := 0; k < len(patterns); k++ {
-			fmt.Println("here", cur)
 			n, err := makeBytePatternInt(cur)
 			if err != nil {
 				return nil, err

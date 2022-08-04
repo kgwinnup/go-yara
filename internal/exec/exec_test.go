@@ -261,13 +261,13 @@ func TestRuleBytes(t *testing.T) {
 
 	rule := `rule Foobar : Tag1 {
     strings:
-        $s1 = { 41 41 41 ( 42 | 43 ) } 
+        $s1 = { 41 41 41 [1-5] ( 42 | 43 ) } 
     condition:
         $s1
 }
 `
 
-	input := "AAAB"
+	input := "AAADDB"
 	out, _ := testCompile(rule, input)
 
 	if len(out) == 0 {

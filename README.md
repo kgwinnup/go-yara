@@ -44,6 +44,14 @@ add null bytes after each ASCII char (1 byte) and transform into
 UTF16LE. Go-yara will transform the UTF8 pattern into UTF16 and fully
 support any Unicode characters.
 
+## Byte pattern matching and wildcard bytes
+
+In C Yara you can specify wildcards for byte matches with ? on either
+place of a represented byte, e.g. ?F, F?, or FF. I have not
+implemented this and instead defined any byte definition that contains
+a ? char as a wild card byte. The entire byte will be treated as a
+wildcard.
+
 # Example
 
 see the `cmd/main.go` for a full example

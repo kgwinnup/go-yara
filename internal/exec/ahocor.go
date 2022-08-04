@@ -188,32 +188,32 @@ func ACNext(matches []*[]int, nodes []*ACNode, input []byte) {
 					break
 				}
 
-				if node.match >= 0 && node.partialMatch == nil {
-					if lst := matches[node.match]; lst != nil {
-						*lst = append(*lst, i-node.matchOffset)
+				if temp.match >= 0 && temp.partialMatch == nil {
+					if lst := matches[temp.match]; lst != nil {
+						*lst = append(*lst, i-temp.matchOffset)
 					} else {
-						matches[node.match] = &[]int{i - node.matchOffset}
+						matches[temp.match] = &[]int{i - temp.matchOffset}
 					}
 
-				} else if node.match >= 0 && node.partialMatch != nil {
+				} else if temp.match >= 0 && node.partialMatch != nil {
 					match := true
 
-					for j := i - node.matchOffset; j < len(input); j++ {
-						if node.partialMatch[j]&0x1000 == 0x1000 {
+					for j := i - temp.matchOffset; j < len(input); j++ {
+						if temp.partialMatch[j]&0x1000 == 0x1000 {
 							continue
 						}
 
-						if byte(node.partialMatch[j]) != input[j] {
+						if byte(temp.partialMatch[j]) != input[j] {
 							match = false
 							break
 						}
 					}
 
 					if match {
-						if lst := matches[node.match]; lst != nil {
-							*lst = append(*lst, i-node.matchOffset)
+						if lst := matches[temp.match]; lst != nil {
+							*lst = append(*lst, i-temp.matchOffset)
 						} else {
-							matches[node.match] = &[]int{i - node.matchOffset}
+							matches[temp.match] = &[]int{i - temp.matchOffset}
 						}
 					}
 				}

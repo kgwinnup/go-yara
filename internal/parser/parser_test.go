@@ -153,7 +153,7 @@ func TestParseBytes(t *testing.T) {
 		t.Fatal("expecting bytes")
 	}
 
-	if len(bytes.Items) != 9 {
+	if len(bytes.Items) != 10 {
 		t.Fatalf("expecting 6 byte nodes, got %v", len(bytes.Items))
 	}
 }

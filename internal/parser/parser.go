@@ -733,6 +733,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 		switch tok.Type {
 		case lexer.LPAREN, lexer.LBRACKET:
 			stack = append([]int{tok.Type}, stack...)
+			bytes = append(bytes, tok.Raw)
 
 		case lexer.RPAREN:
 			if stack[0] == lexer.LPAREN {

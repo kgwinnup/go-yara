@@ -193,7 +193,7 @@ func (b *Bytes) BytePattern() ([][]int, error) {
 				patterns[k] = append(patterns[k], 0x10000)
 			}
 
-			i += 3
+			i += 4
 			continue
 		}
 
@@ -243,6 +243,7 @@ func (b *Bytes) BytePattern() ([][]int, error) {
 		}
 
 		for k := 0; k < len(patterns); k++ {
+			fmt.Println("here", cur)
 			n, err := makeBytePatternInt(cur)
 			if err != nil {
 				return nil, err

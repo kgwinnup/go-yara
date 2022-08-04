@@ -18,6 +18,10 @@ type Pattern struct {
 	Pattern []byte
 	// what rule this pattern is tied to.
 	MatchIndex int
+	// if Pattern is not the complete string, full match is the
+	// complete string with 0x10000 as place holders for bytes with ??
+	FullMatch []int
+	IsPartial bool
 }
 
 type CompiledRule struct {
@@ -191,10 +195,39 @@ func Compile(input string) (*CompiledRules, error) {
 						compiled.mappings[temp.Name] = temp
 					}
 
+				} else if _, ok := assign.Right.(*ast.Bytes); ok {
+
+					mainPattern := &Pattern{
+						Name:       fmt.Sprintf("%v_%v", rule.Name, assign.Left),
+						Pattern:    bytePattern.Patterns[0],
+						MatchIndex: index,
+						IsPartial:  len(bytePattern.Patterns[0]) == len(bytePattern.PartialPatterns[0]),
+						FullMatch:  bytePattern.PartialPatterns[0],
+					}
+					patterns = append(patterns, mainPattern)
+					compiled.mappings[mainPattern.Name] = mainPattern
+
+					index++
+
+					for i, pattern := range bytePattern.Patterns {
+						if i == 0 {
+							continue
+						}
+
+						temp := &Pattern{
+							Name:       fmt.Sprintf("%v_%v_%v", rule.Name, assign.Left, i),
+							Pattern:    pattern,
+							MatchIndex: mainPattern.MatchIndex,
+							IsPartial:  len(bytePattern.Patterns[0]) == len(bytePattern.PartialPatterns[0]),
+							FullMatch:  bytePattern.PartialPatterns[0],
+						}
+
+						patterns = append(patterns, temp)
+					}
+
 				} else {
 					return nil, errors.New("compiler: invalid strings type")
 				}
-
 			}
 		}
 

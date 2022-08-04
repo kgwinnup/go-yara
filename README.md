@@ -22,7 +22,7 @@ parsers.
 - [x] lexer and parser
 - [x] virtual machine for evaluation 
 - [x] standard string pattern types
-- [ ] bytes pattern types
+- [x] bytes pattern types
 - [ ] regex pattern types
 - [ ] modules 
 

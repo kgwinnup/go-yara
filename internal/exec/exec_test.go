@@ -256,3 +256,22 @@ rule Occurrences
 		t.Fatal("OF pattern failed to match")
 	}
 }
+
+func TestRuleBytes(t *testing.T) {
+
+	rule := `rule Foobar : Tag1 {
+    strings:
+        $s1 = { 41 41 41 [1-5] ( 42 | 43 ) } 
+    condition:
+        $s1
+}
+`
+
+	input := "AAADDB"
+	out, _ := testCompile(rule, input)
+
+	if len(out) == 0 {
+		t.Fatal("patterns failed to match")
+	}
+
+}

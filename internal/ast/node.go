@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf16"
 
@@ -146,6 +147,111 @@ func (b Bytes) String() string {
 
 func (b *Bytes) Type() int {
 	return BYTES
+}
+
+func makeBytePatternInt(s string) (int, error) {
+
+	if strings.Contains(s, "?") {
+		return 0x10000, nil
+	}
+
+	if n, err := strconv.ParseInt(s, 16, 16); err != nil {
+		return 0, err
+	} else {
+		return int(n), nil
+	}
+}
+
+func (b *Bytes) BytePattern() ([][]int, error) {
+
+	patterns := make([][]int, 0)
+	patterns = append(patterns, []int{})
+
+	for i := 0; i < len(b.Items); i++ {
+		cur := b.Items[i]
+
+		if cur == "[" {
+			if i+3 >= len(b.Items) {
+				return nil, errors.New("syntax error in byte pattern bracket")
+			}
+
+			first, err := strconv.ParseInt(b.Items[i+1], 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			second, err := strconv.ParseInt(b.Items[i+3], 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			if first > second {
+				return nil, errors.New("invalid range in byte pattern")
+			}
+
+			for k := 0; k < len(patterns); k++ {
+				patterns[k] = append(patterns[k], 0x10000)
+			}
+
+			i += 4
+			continue
+		}
+
+		if cur == "(" {
+			parts := make([][]int, 0)
+			temp := make([]int, 0)
+
+			for j := i + 1; j < len(b.Items); j++ {
+
+				if b.Items[j] == ")" {
+					i = j
+					break
+				}
+
+				if b.Items[j] == "|" {
+					parts = append(parts, temp)
+					temp = make([]int, 0)
+					continue
+				}
+
+				n, err := makeBytePatternInt(b.Items[j])
+				if err != nil {
+					return nil, err
+				}
+
+				temp = append(temp, n)
+			}
+
+			parts = append(parts, temp)
+
+			// clone patterns len(parts) times
+			for i := 0; i < len(parts)-1; i++ {
+				for _, pattern := range patterns {
+					dst := make([]int, len(pattern))
+					copy(dst, pattern)
+
+					patterns = append(patterns, dst)
+				}
+			}
+
+			for i := 0; i < len(patterns); i++ {
+				patterns[i] = append(patterns[i], parts[i%len(parts)]...)
+			}
+
+			continue
+		}
+
+		for k := 0; k < len(patterns); k++ {
+			n, err := makeBytePatternInt(cur)
+			if err != nil {
+				return nil, err
+			}
+
+			patterns[k] = append(patterns[k], n)
+		}
+	}
+
+	return patterns, nil
 }
 
 type Identity struct {
@@ -370,9 +476,11 @@ func (a *Assignment) Type() int {
 }
 
 type BytePattern struct {
-	Patterns [][]byte
-	Offsets  []int
-	Nocase   bool
+	Patterns        [][]byte
+	Offsets         []int
+	Nocase          bool
+	IsPartial       bool
+	PartialPatterns [][]int
 }
 
 // BytePattern returns a byte slice which represents the pattern to
@@ -382,9 +490,11 @@ type BytePattern struct {
 func (a *Assignment) BytePattern() (*BytePattern, error) {
 
 	ret := &BytePattern{
-		Patterns: make([][]byte, 0),
-		Offsets:  make([]int, 0),
-		Nocase:   false,
+		Patterns:        make([][]byte, 0),
+		Offsets:         make([]int, 0),
+		Nocase:          false,
+		IsPartial:       false,
+		PartialPatterns: make([][]int, 0),
 	}
 
 	if str, ok := a.Right.(*String); ok {
@@ -429,8 +539,33 @@ func (a *Assignment) BytePattern() (*BytePattern, error) {
 		return ret, nil
 	}
 
-	if _, ok := a.Right.(*Bytes); ok {
-		return nil, errors.New("byte patterns are not supported at this time")
+	if bs, ok := a.Right.(*Bytes); ok {
+		patterns, err := bs.BytePattern()
+		if err != nil {
+			return nil, err
+		}
+
+		bytePatterns := make([][]byte, 0)
+
+		for _, pattern := range patterns {
+			temp := make([]byte, 0)
+
+			for _, b := range pattern {
+				if b&0x10000 == 0x10000 {
+					ret.IsPartial = true
+					break
+				}
+
+				temp = append(temp, byte(b))
+			}
+
+			bytePatterns = append(bytePatterns, temp)
+		}
+
+		ret.PartialPatterns = patterns
+		ret.Patterns = bytePatterns
+
+		return ret, nil
 	}
 
 	if _, ok := a.Right.(*Regex); ok {

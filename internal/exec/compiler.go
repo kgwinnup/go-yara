@@ -191,10 +191,11 @@ func Compile(input string) (*CompiledRules, error) {
 						compiled.mappings[temp.Name] = temp
 					}
 
+				} else if _, ok := assign.Right.(*ast.Bytes); ok {
+
 				} else {
 					return nil, errors.New("compiler: invalid strings type")
 				}
-
 			}
 		}
 

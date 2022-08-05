@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kgwinnup/go-yara/internal/ast"
 	"github.com/kgwinnup/go-yara/internal/lexer"
@@ -81,15 +82,26 @@ func (c *CompiledRules) Scan(input []byte, s bool, timeout int) ([]*ScanOutput, 
 	static := make([]int64, 0)
 	static = append(static, int64(len(input)))
 
+	var wg sync.WaitGroup
 	// get the next node in the automata and return a list of
 	// matches indexed the same as the patterns slice
 	if c.automataCount > 0 {
-		ACNext(matches, c.automata, input)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ACNext(matches, c.automata, input)
+		}()
 	}
 
 	if c.automataNocaseCount > 0 {
-		ACNextNocase(matches, c.automataNocase, input)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ACNextNocase(matches, c.automataNocase, input)
+		}()
 	}
+
+	wg.Wait()
 
 	for _, rule := range c.rules {
 		out, err := Eval(rule, matches, static)
@@ -142,7 +154,7 @@ func Compile(input string) (*CompiledRules, error) {
 
 	// index where each pattern will be in the match structure when
 	// evaluated
-	index := 0
+	index := 1
 
 	for _, rule := range rules {
 		compiledRule := &CompiledRule{

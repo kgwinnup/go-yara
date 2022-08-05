@@ -154,7 +154,7 @@ func Compile(input string) (*CompiledRules, error) {
 
 	// index where each pattern will be in the match structure when
 	// evaluated
-	index := 1
+	index := 0
 
 	for _, rule := range rules {
 		compiledRule := &CompiledRule{

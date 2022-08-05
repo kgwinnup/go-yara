@@ -6,8 +6,7 @@ The purpose of this project is primarily for backends written in
 Golang requiring Yara. Linking Yara in Golang is kind of annoying,
 both statically and dynamically. Additionally, when linking a C
 library in Golang there is a little overhead in calling the C library
-code. As a result (at least in my testing), this pure Golang version
-is about 18% faster than the linking the C library.
+code. 
 
 My primary use case is matching against text files so the focus is on
 getting that feature compatible first, and of course the condition
@@ -23,6 +22,7 @@ parsers.
 - [x] virtual machine for evaluation 
 - [x] standard string pattern types
 - [x] bytes pattern types
+- [ ] optimize Aho-Corasick algorithm, make into table
 - [ ] regex pattern types
 - [ ] modules 
 

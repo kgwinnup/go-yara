@@ -335,7 +335,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			c.compileNode(ruleName, infix.Right, instructions)
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
-				push1(IN, int64(c.mappings[name].MatchIndex))
+
+				if p, ok := c.mappings[name]; ok {
+					push1(IN, int64(p.MatchIndex))
+				} else {
+					return errors.New(fmt.Sprintf("compiler: invalid IN operation, unknown variable"))
+				}
 			} else {
 				return errors.New(fmt.Sprintf("compiler: invalid IN operation, left value must be a variable"))
 			}
@@ -346,7 +351,11 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			if keyword, ok := infix.Right.(*ast.Keyword); ok && keyword.Token.Type == lexer.THEM {
 				names := c.patternsInRule(ruleName)
 				for _, name := range names {
-					push1(LOADCOUNT, int64(c.mappings[name].MatchIndex))
+					if p, ok := c.mappings[name]; ok {
+						push1(LOADCOUNT, int64(p.MatchIndex))
+					} else {
+						return errors.New(fmt.Sprintf("compiler: invalid OF operation, unknown variable"))
+					}
 				}
 			} else {
 				c.compileNode(ruleName, infix.Right, instructions)
@@ -374,9 +383,13 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 		case lexer.LBRACKET:
 			if v, ok := infix.Left.(*ast.Variable); ok {
 				c.compileNode(ruleName, infix.Right, instructions)
-
 				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
-				push1(LOADOFFSET, int64(c.mappings[name].MatchIndex))
+
+				if p, ok := c.mappings[name]; ok {
+					push1(LOADOFFSET, int64(p.MatchIndex))
+				} else {
+					return errors.New(fmt.Sprintf("compiler: invalid variable index, unknown variable"))
+				}
 
 				return nil
 
@@ -417,7 +430,13 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 		case lexer.AT:
 			if variable, ok := infix.Left.(*ast.Variable); ok {
 				name := fmt.Sprintf("%v_%v", ruleName, variable.Value)
-				push1(AT, int64(c.mappings[name].MatchIndex))
+
+				if p, ok := c.mappings[name]; ok {
+					push1(AT, int64(p.MatchIndex))
+				} else {
+					return errors.New(fmt.Sprintf("compiler: invalid AT, unknown variable"))
+				}
+
 			} else {
 				return errors.New(fmt.Sprintf("compiler: invalid AT operation, left value must be a variable"))
 			}
@@ -465,7 +484,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			for _, name := range c.patternsInRule(ruleName) {
 				if strings.HasPrefix(name, prefix) {
 					count++
-					push1(LOADCOUNT, int64(c.mappings[name].MatchIndex))
+
+					if p, ok := c.mappings[name]; ok {
+						push1(LOADCOUNT, int64(p.MatchIndex))
+					} else {
+						return errors.New(fmt.Sprintf("compiler: unknown variable"))
+					}
 				}
 			}
 
@@ -476,7 +500,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			if len(v.Value) > 1 {
 				name := fmt.Sprintf("%v_%v", ruleName, strings.Replace(v.Value, "@", "$", 1))
 				push1(PUSH, 0)
-				push1(LOADOFFSET, int64(c.mappings[name].MatchIndex))
+
+				if p, ok := c.mappings[name]; ok {
+					push1(LOADOFFSET, int64(p.MatchIndex))
+				} else {
+					return errors.New(fmt.Sprintf("compiler: unknown variable"))
+				}
 			} else {
 				push1(PUSH, 0)
 				push1(LOADOFFSET, c.tempVar)
@@ -484,7 +513,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 		} else {
 			if len(v.Value) > 1 {
 				name := fmt.Sprintf("%v_%v", ruleName, v.Value)
-				push1(LOADCOUNT, int64(c.mappings[name].MatchIndex))
+
+				if p, ok := c.mappings[name]; ok {
+					push1(LOADCOUNT, int64(p.MatchIndex))
+				} else {
+					return errors.New(fmt.Sprintf("compiler: unknown variable"))
+				}
 			} else {
 				push1(PUSH, 0)
 				push1(LOADCOUNT, c.tempVar)
@@ -554,9 +588,15 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			push1(MOVR, REG3)
 
 			for _, name := range names {
-				c.tempVar = int64(c.mappings[name].MatchIndex)
+				if p, ok := c.mappings[name]; ok {
+					c.tempVar = int64(p.MatchIndex)
+				} else {
+					return errors.New(fmt.Sprintf("compiler: unknown variable in loop"))
+				}
+
 				c.compileNode(ruleName, loop.Body, instructions)
 				push1(ADDR, REG2)
+
 			}
 
 			push1(PUSHR, REG2)
@@ -568,7 +608,12 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 
 			for _, name := range c.patternsInRule(ruleName) {
 
-				c.tempVar = int64(c.mappings[name].MatchIndex)
+				if p, ok := c.mappings[name]; ok {
+					c.tempVar = int64(p.MatchIndex)
+				} else {
+					return errors.New(fmt.Sprintf("compiler: unknown variable in loop"))
+				}
+
 				c.compileNode(ruleName, loop.Body, instructions)
 				push1(ADDR, REG2)
 			}

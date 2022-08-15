@@ -1,0 +1,21 @@
+echo 'foobar foobaz'
+orig         foobar foobaz
+
+echo 'foobar foobaz' | base64
+base64       Zm9vYmFyIGZvb2Jhego=
+
+echo 'Afoobar foobaz' | base64
+QWZvb2JhciBmb29iYXoK
+
+echo 'AAfoobar foobaz' | base64
+QUFmb29iYXIgZm9vYmF6Cg==
+
+echo 'foobar foobaz' | iconv -t UTF-16LE -f UTF8 | base64
+base64wide   ZgBvAG8AYgBhAHIAIABmAG8AbwBiAGEAegAKAA== 
+
+echo 'Afoobar foobaz' | iconv -t UTF-16LE -f UTF8 | base64
+QQBmAG8AbwBiAGEAcgAgAGYAbwBvAGIAYQB6AAoA
+
+echo 'AAfoobar foobaz' | iconv -t UTF-16LE -f UTF8 | base64
+QQBBAGYAbwBvAGIAYQByACAAZgBvAG8AYgBhAHoACgA=
+

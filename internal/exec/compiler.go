@@ -442,7 +442,7 @@ func (c *CompiledRules) compileNode(ruleName string, node ast.Node, instructions
 			}
 
 		default:
-			return errors.New(fmt.Sprintf("compiler: invalid infix operation: %v", infix.Type()))
+			return errors.New(fmt.Sprintf("compiler: invalid or unsupported infix operation: %v", infix.Type()))
 		}
 
 		return nil

@@ -2,7 +2,12 @@ package exec
 
 import (
 	"testing"
+
+	_ "embed"
 )
+
+//go:embed test.base64
+var inputBase64 string
 
 func testCompile(rule string, input string) ([]*ScanOutput, error) {
 	compiled, err := Compile(rule)
@@ -310,4 +315,18 @@ func TestRuleBytes3(t *testing.T) {
 		t.Fatal("patterns failed to match")
 	}
 
+}
+
+func TestBase64(t *testing.T) {
+	rule := `rule Foobar {
+    strings:
+        $s1 = "foobar foobaZ" base64 nocase
+    condition:
+        $s1
+}`
+
+	out, _ := testCompile(rule, inputBase64)
+	if len(out) == 0 {
+		t.Fatal("failed to match base64")
+	}
 }

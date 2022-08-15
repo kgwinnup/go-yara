@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/kgwinnup/go-yara/internal/ast"
@@ -172,4 +173,35 @@ func TestParseSet(t *testing.T) {
 	if len(set.Nodes) != 3 {
 		t.Fatalf("expecting a set of 3, got %v", len(set.Nodes))
 	}
+}
+
+func FuzzParser(f *testing.F) {
+	s := "{ 68 65 6c 6c 6f }"
+	f.Add(s, "$s1 and #s1 > 0")
+
+	s = "\"foobar\" wide nocase"
+	f.Add(s, "$s1 and #s1 > 0")
+
+	s = "/^(foobar)[0-9a-zA-Z]{0,5}/"
+	f.Add(s, "$s1 and #s1 > 0")
+
+	s = "{ ff ( fa | fb ) | ff aa bb ?? ?a a? }"
+	f.Add(s, "$s1 and #s1 > 0")
+
+	s = "{ ff ( fa | fb ) | ff aa bb ?? ?a a? }"
+	f.Add(s, "for any i in (0..3) : ( @a[i] + 10 == @b[i] )")
+
+	f.Fuzz(func(t *testing.T, in string, co string) {
+
+		rule := fmt.Sprintf(`rule Foobar : Tag1 {
+    strings:
+        $s1 = %v 
+    condition:
+        %v
+}
+`, in, co)
+
+		_, _ = New(rule)
+
+	})
 }

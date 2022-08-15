@@ -49,6 +49,10 @@ func (p *Parser) parse() error {
 			break
 		}
 
+		if err != nil {
+			return err
+		}
+
 		switch tok.Type {
 		case lexer.IMPORT:
 			mod, err := p.parseImport()
@@ -65,8 +69,10 @@ func (p *Parser) parse() error {
 			}
 
 			p.Nodes = append(p.Nodes, rule)
-		}
 
+		default:
+			return errors.New(fmt.Sprintf("parser: invalid token '%v'", tok.Raw))
+		}
 	}
 
 	return nil
@@ -385,7 +391,10 @@ func (p *Parser) parseFor() (ast.Node, error) {
 		return nil, errors.New(fmt.Sprintf("parser: for expression expects 'any' or 'all' keywords, got '%v'", expr))
 	}
 
-	tok, _ := p.lexer.Peek()
+	tok, err := p.lexer.Peek()
+	if err != nil {
+		return nil, err
+	}
 
 	if tok.Type == lexer.IDENTITY {
 		_var, _ := p.lexer.Next()
@@ -568,7 +577,11 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 		case lexer.XOR, lexer.BASE64, lexer.BASE64WIDE:
 			kw, _ := p.lexer.Next()
 
-			tok, _ = p.lexer.Peek()
+			tok, err = p.lexer.Peek()
+			if err != nil {
+				return nil, err
+			}
+
 			if tok.Type == lexer.LPAREN {
 				p.lexer.Next()
 
@@ -622,7 +635,10 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 
 		case lexer.VARIABLE:
 			tok, _ := p.lexer.Next()
-			tok2, _ := p.lexer.Peek()
+			tok2, err := p.lexer.Peek()
+			if err != nil {
+				return nil, err
+			}
 
 			if tok2.Type == lexer.ASTERISK {
 				p.lexer.Next()
@@ -656,7 +672,11 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 	}
 
 	if integer, ok := left.(*ast.Integer); ok {
-		tok, _ := p.lexer.Peek()
+		tok, err := p.lexer.Peek()
+		if err != nil {
+			return nil, err
+		}
+
 		if tok.Type == lexer.KB {
 			p.lexer.Next()
 			integer.Value = integer.Value * 1024
@@ -717,7 +737,10 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 	inRange := false
 
 	for {
-		tok, _ := p.lexer.Peek()
+		tok, err = p.lexer.Peek()
+		if err != nil {
+			return nil, err
+		}
 
 		if tok.Type == lexer.EOF {
 			return nil, errors.New("parser: EOF reached while parsing bytes")
@@ -760,7 +783,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 			bytes = append(bytes, tok.Raw)
 
 		case lexer.RPAREN:
-			if stack[0] == lexer.LPAREN {
+			if len(stack) > 0 && stack[0] == lexer.LPAREN {
 				stack = stack[1:]
 				bytes = append(bytes, tok.Raw)
 			} else {
@@ -769,7 +792,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 
 		case lexer.RBRACKET:
 			inRange = false
-			if stack[0] == lexer.LBRACKET {
+			if len(stack) > 0 && stack[0] == lexer.LBRACKET {
 				stack = stack[1:]
 				bytes = append(bytes, tok.Raw)
 			} else {

@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"unicode"
@@ -432,6 +433,12 @@ func (s *Lexer) next() (*Token, error) {
 		return &Token{Raw: "?" + ident.Raw, Type: IDENTITY}, nil
 
 	default:
+
+		tok := s.peek()
+		if tok != '?' && tok != '_' && !unicode.IsLetter(tok) {
+			return nil, errors.New(fmt.Sprintf("lexer: invalid character '%v'", tok))
+		}
+
 		ident, err := s.readIdentity()
 		if err != nil {
 			return nil, err

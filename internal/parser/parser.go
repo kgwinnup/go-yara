@@ -71,7 +71,7 @@ func (p *Parser) parse() error {
 			p.Nodes = append(p.Nodes, rule)
 
 		default:
-			return errors.New(fmt.Sprintf("parser: invalid token '%v'", tok.Raw))
+			return p.parseError(tok, "invalid token")
 		}
 	}
 
@@ -225,7 +225,7 @@ func (p *Parser) parseBody() ([]ast.Node, error) {
 		assignment.Left = name.Raw
 
 		if name.Type != lexer.IDENTITY && name.Type != lexer.VARIABLE {
-			return nil, errors.New("parser: assignment must be an identity or variable")
+			return nil, p.parseError(name, "assignment must be an identity or variable")
 		}
 
 		_, err = p.expectRead(lexer.ASSIGNMENT, "expecting equals char for assignment")
@@ -388,7 +388,7 @@ func (p *Parser) parseFor() (ast.Node, error) {
 	switch expr.Type {
 	case lexer.INTEGER, lexer.ANY, lexer.ALL:
 	default:
-		return nil, errors.New(fmt.Sprintf("parser: for expression expects 'any' or 'all' keywords, got '%v'", expr))
+		return nil, p.parseError(expr, "'for' expression expects 'any' or 'all' keywords")
 	}
 
 	tok, err := p.lexer.Peek()
@@ -399,7 +399,7 @@ func (p *Parser) parseFor() (ast.Node, error) {
 	if tok.Type == lexer.IDENTITY {
 		_var, _ := p.lexer.Next()
 		if _var.Type != lexer.IDENTITY {
-			return nil, errors.New("parser: expecting an identity")
+			return nil, p.parseError(_var, "expecting an identity")
 		}
 
 		_, _ = p.lexer.Next()
@@ -474,7 +474,7 @@ func (p *Parser) parseFor() (ast.Node, error) {
 			Body:      body,
 		}, nil
 	} else {
-		return nil, errors.New(fmt.Sprintf("parser: for expression expects 'of' or 'in' keywords or an identity like 'i', got '%v'", expr))
+		return nil, p.parseError(tok, "'for' expression expects 'of' or 'in' keywords or an identity like 'i'")
 	}
 
 }
@@ -667,7 +667,7 @@ func (p *Parser) parseExpr(power int) (ast.Node, error) {
 			return p.parseBytes()
 
 		default:
-			return nil, errors.New(fmt.Sprintf("parser: invalid expression at: '%v'", tok.Raw))
+			return nil, p.parseError(tok, "invalid expression")
 		}
 	}
 
@@ -743,7 +743,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 		}
 
 		if tok.Type == lexer.EOF {
-			return nil, errors.New("parser: EOF reached while parsing bytes")
+			return nil, p.parseError(tok, "EOF reached while parsing bytes")
 		}
 
 		if tok.Type == lexer.RBRACE {
@@ -765,7 +765,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 				}
 
 				if len(temp.Raw) != 1 {
-					return nil, errors.New("expecting 2 chars per byte")
+					return nil, p.parseError(tok, "expecting two chars per byte")
 				}
 
 				tok.Raw += temp.Raw
@@ -787,7 +787,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 				stack = stack[1:]
 				bytes = append(bytes, tok.Raw)
 			} else {
-				return nil, errors.New("parser: invalid byte value")
+				return nil, p.parseError(tok, "invalid byte value")
 			}
 
 		case lexer.RBRACKET:
@@ -796,7 +796,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 				stack = stack[1:]
 				bytes = append(bytes, tok.Raw)
 			} else {
-				return nil, errors.New("parser: invalid byte value")
+				return nil, p.parseError(tok, "invalid byte value")
 			}
 
 		default:
@@ -805,7 +805,7 @@ func (p *Parser) parseBytes() (ast.Node, error) {
 	}
 
 	if len(stack) != 0 {
-		return nil, errors.New("parser: imbalanced parens or brackets in byte definition")
+		return nil, p.parseError(tok, "imbalanced parens or brackets in byte definition")
 	}
 
 	_, err = p.expectRead(lexer.RBRACE, "expecting closing brace for byte definition")
@@ -823,9 +823,16 @@ func (p *Parser) expectRead(tokenType int, errorMsg string) (*lexer.Token, error
 	}
 
 	if tok.Type != tokenType {
-		return nil, errors.New(fmt.Sprintf("parser: %v", errorMsg))
+		return nil, errors.New(fmt.Sprintf("error %v:%v: %v", tok.Row, tok.Col, errorMsg))
 	}
 
 	return tok, nil
+}
 
+func (p *Parser) parseError(tok *lexer.Token, errorMsg string) error {
+	if tok != nil {
+		return errors.New(fmt.Sprintf("error %v:%v: %v", tok.Row, tok.Col, errorMsg))
+	}
+
+	return errors.New(fmt.Sprintf("error %v", errorMsg))
 }

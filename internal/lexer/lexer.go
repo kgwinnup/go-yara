@@ -157,6 +157,8 @@ var keywords = map[string]int{
 type Token struct {
 	Raw  string
 	Type int
+	Row  int
+	Col  int
 }
 
 type Lexer struct {
@@ -164,6 +166,8 @@ type Lexer struct {
 	index int
 	cur   *Token
 	err   error
+	row   int
+	col   int
 }
 
 func New(input string) *Lexer {
@@ -171,6 +175,7 @@ func New(input string) *Lexer {
 	scanner := &Lexer{
 		input: []rune(input),
 		index: 0,
+		row:   1,
 		cur:   nil,
 	}
 
@@ -217,6 +222,14 @@ func (s *Lexer) Peek() (*Token, error) {
 func (s *Lexer) read() (rune, error) {
 	if s.index < len(s.input) {
 		temp := s.input[s.index]
+
+		if temp == '\n' {
+			s.row++
+			s.col = 0
+		} else {
+			s.col++
+		}
+
 		s.index++
 		return temp, nil
 	}
@@ -272,7 +285,7 @@ func (s *Lexer) next() (*Token, error) {
 				builder.WriteRune(r)
 			}
 
-			return &Token{Raw: builder.String(), Type: COMMENT}, nil
+			return &Token{Raw: builder.String(), Type: COMMENT, Row: s.row, Col: s.col}, nil
 		}
 
 		if s.peek() == '*' {
@@ -280,130 +293,130 @@ func (s *Lexer) next() (*Token, error) {
 			return s.readComment()
 		}
 
-		return &Token{Raw: "/", Type: DIVIDE}, nil
+		return &Token{Raw: "/", Type: DIVIDE, Row: s.row, Col: s.col}, nil
 
 	case ',':
 		s.read()
-		return &Token{Raw: ",", Type: COMMA}, nil
+		return &Token{Raw: ",", Type: COMMA, Row: s.row, Col: s.col}, nil
 
 	case ':':
 		s.read()
-		return &Token{Raw: ":", Type: COLON}, nil
+		return &Token{Raw: ":", Type: COLON, Row: s.row, Col: s.col}, nil
 
 	case '(':
 		s.read()
-		return &Token{Raw: "(", Type: LPAREN}, nil
+		return &Token{Raw: "(", Type: LPAREN, Row: s.row, Col: s.col}, nil
 
 	case ')':
 		s.read()
-		return &Token{Raw: ")", Type: RPAREN}, nil
+		return &Token{Raw: ")", Type: RPAREN, Row: s.row, Col: s.col}, nil
 
 	case '{':
 		s.read()
-		return &Token{Raw: "{", Type: LBRACE}, nil
+		return &Token{Raw: "{", Type: LBRACE, Row: s.row, Col: s.col}, nil
 
 	case '}':
 		s.read()
-		return &Token{Raw: "}", Type: RBRACE}, nil
+		return &Token{Raw: "}", Type: RBRACE, Row: s.row, Col: s.col}, nil
 
 	case '[':
 		s.read()
-		return &Token{Raw: "[", Type: LBRACKET}, nil
+		return &Token{Raw: "[", Type: LBRACKET, Row: s.row, Col: s.col}, nil
 
 	case ']':
 		s.read()
-		return &Token{Raw: "]", Type: RBRACKET}, nil
+		return &Token{Raw: "]", Type: RBRACKET, Row: s.row, Col: s.col}, nil
 
 	case '+':
 		s.read()
-		return &Token{Raw: "+", Type: PLUS}, nil
+		return &Token{Raw: "+", Type: PLUS, Row: s.row, Col: s.col}, nil
 
 	case '-':
 		s.read()
-		return &Token{Raw: "-", Type: MINUS}, nil
+		return &Token{Raw: "-", Type: MINUS, Row: s.row, Col: s.col}, nil
 
 	case '*':
 		s.read()
-		return &Token{Raw: "*", Type: ASTERISK}, nil
+		return &Token{Raw: "*", Type: ASTERISK, Row: s.row, Col: s.col}, nil
 
 	case '%':
 		s.read()
-		return &Token{Raw: "%", Type: MOD}, nil
+		return &Token{Raw: "%", Type: MOD, Row: s.row, Col: s.col}, nil
 
 	case '.':
 		s.read()
 		if s.peek() == '.' {
 			s.read()
-			return &Token{Raw: "..", Type: RANGE}, nil
+			return &Token{Raw: "..", Type: RANGE, Row: s.row, Col: s.col}, nil
 		}
-		return &Token{Raw: ".", Type: DOT}, nil
+		return &Token{Raw: ".", Type: DOT, Row: s.row, Col: s.col}, nil
 
 	case '|':
 		s.read()
-		return &Token{Raw: "|", Type: PIPE}, nil
+		return &Token{Raw: "|", Type: PIPE, Row: s.row, Col: s.col}, nil
 
 	case '&':
 		s.read()
-		return &Token{Raw: "&", Type: AMPERSAND}, nil
+		return &Token{Raw: "&", Type: AMPERSAND, Row: s.row, Col: s.col}, nil
 
 	case '>':
 		s.read()
 
 		if s.peek() == '>' {
 			s.read()
-			return &Token{Raw: ">>", Type: SHIFTRIGHT}, nil
+			return &Token{Raw: ">>", Type: SHIFTRIGHT, Row: s.row, Col: s.col}, nil
 
 		}
 
 		if s.peek() == '=' {
 			s.read()
-			return &Token{Raw: ">=", Type: GTE}, nil
+			return &Token{Raw: ">=", Type: GTE, Row: s.row, Col: s.col}, nil
 
 		}
 
-		return &Token{Raw: ">", Type: GT}, nil
+		return &Token{Raw: ">", Type: GT, Row: s.row, Col: s.col}, nil
 
 	case '<':
 		s.read()
 
 		if s.peek() == '<' {
 			s.read()
-			return &Token{Raw: "<<", Type: SHIFTLEFT}, nil
+			return &Token{Raw: "<<", Type: SHIFTLEFT, Row: s.row, Col: s.col}, nil
 
 		}
 
 		if s.peek() == '=' {
 			s.read()
-			return &Token{Raw: "<=", Type: LTE}, nil
+			return &Token{Raw: "<=", Type: LTE, Row: s.row, Col: s.col}, nil
 
 		}
 
-		return &Token{Raw: "<", Type: LT}, nil
+		return &Token{Raw: "<", Type: LT, Row: s.row, Col: s.col}, nil
 
 	case '^':
 		s.read()
-		return &Token{Raw: "^", Type: CARET}, nil
+		return &Token{Raw: "^", Type: CARET, Row: s.row, Col: s.col}, nil
 
 	case '!':
 		s.read()
 
 		if s.peek() == '=' {
 			s.read()
-			return &Token{Raw: "!=", Type: NOTEQUAL}, nil
+			return &Token{Raw: "!=", Type: NOTEQUAL, Row: s.row, Col: s.col}, nil
 		}
 
-		return nil, errors.New("invalid character '!'")
+		return nil, s.readError(s.row, s.col, "invalid character")
 
 	case '=':
 		s.read()
 
 		if s.peek() == '=' {
 			s.read()
-			return &Token{Raw: "==", Type: EQUAL}, nil
+			return &Token{Raw: "==", Type: EQUAL, Row: s.row, Col: s.col}, nil
 
 		}
 
-		return &Token{Raw: "=", Type: ASSIGNMENT}, nil
+		return &Token{Raw: "=", Type: ASSIGNMENT, Row: s.row, Col: s.col}, nil
 
 	case '"':
 		return s.readString()
@@ -419,24 +432,24 @@ func (s *Lexer) next() (*Token, error) {
 		}
 
 		if r == '$' {
-			return &Token{Raw: "$" + ident.Raw, Type: VARIABLE}, nil
+			return &Token{Raw: "$" + ident.Raw, Type: VARIABLE, Row: s.row, Col: s.col}, nil
 		}
 
 		if r == '#' {
-			return &Token{Raw: "#" + ident.Raw, Type: VARIABLE}, nil
+			return &Token{Raw: "#" + ident.Raw, Type: VARIABLE, Row: s.row, Col: s.col}, nil
 		}
 
 		if r == '@' {
-			return &Token{Raw: "@" + ident.Raw, Type: VARIABLE}, nil
+			return &Token{Raw: "@" + ident.Raw, Type: VARIABLE, Row: s.row, Col: s.col}, nil
 		}
 
-		return &Token{Raw: "?" + ident.Raw, Type: IDENTITY}, nil
+		return &Token{Raw: "?" + ident.Raw, Type: IDENTITY, Row: s.row, Col: s.col}, nil
 
 	default:
 
 		tok := s.peek()
 		if tok != '?' && tok != '_' && !unicode.IsLetter(tok) {
-			return nil, errors.New(fmt.Sprintf("lexer: invalid character '%v'", tok))
+			return nil, s.readError(s.row, s.col, fmt.Sprintf("invalid character '%v'", tok))
 		}
 
 		ident, err := s.readIdentity()
@@ -445,7 +458,7 @@ func (s *Lexer) next() (*Token, error) {
 		}
 
 		if typ, ok := keywords[ident.Raw]; ok {
-			return &Token{Raw: ident.Raw, Type: typ}, nil
+			return &Token{Raw: ident.Raw, Type: typ, Row: ident.Row, Col: ident.Col}, nil
 		}
 
 		return ident, nil
@@ -454,6 +467,8 @@ func (s *Lexer) next() (*Token, error) {
 
 func (s *Lexer) readIdentity() (*Token, error) {
 	var builder strings.Builder
+	row := s.row
+	col := s.col
 
 	tok := s.peek()
 
@@ -485,17 +500,21 @@ func (s *Lexer) readIdentity() (*Token, error) {
 	return &Token{
 		Raw:  builder.String(),
 		Type: IDENTITY,
+		Row:  row,
+		Col:  col,
 	}, nil
 }
 
 func (s *Lexer) readComment() (*Token, error) {
 	var builder strings.Builder
+	row := s.row
+	col := s.col
 
 	for {
 		r := s.peek()
 
 		if r == '\000' {
-			return nil, errors.New("lexer: EOF file reached while scanning comment")
+			return nil, s.readError(row, col, "EOF file reached while scanning comment")
 		}
 
 		if r == '*' {
@@ -514,7 +533,7 @@ func (s *Lexer) readComment() (*Token, error) {
 
 	}
 
-	return &Token{Raw: builder.String(), Type: COMMENT}, nil
+	return &Token{Raw: builder.String(), Type: COMMENT, Row: row, Col: col}, nil
 }
 
 func isHexDigit(r rune) bool {
@@ -530,6 +549,8 @@ func isHexDigit(r rune) bool {
 
 func (s *Lexer) readNumber() (*Token, error) {
 	var builder strings.Builder
+	row := s.row
+	col := s.col
 	isHex := false
 
 	if s.peek() == '0' {
@@ -574,17 +595,21 @@ func (s *Lexer) readNumber() (*Token, error) {
 	typ := INTEGER
 
 	if isHex && builder.Len() == 2 {
-		return nil, errors.New("lexer: invalid hex integer, must contain at least 1 number after 0x")
+		return nil, s.readError(row, col, "invalid hex integer, must contain at least 1 number after 0x")
 	}
 
 	return &Token{
 		Raw:  builder.String(),
 		Type: typ,
+		Row:  row,
+		Col:  col,
 	}, nil
 }
 
 func (s *Lexer) readRegex() (*Token, error) {
 	var builder strings.Builder
+	row := s.row
+	col := s.col
 
 	s.read() // initial slash
 
@@ -592,7 +617,7 @@ func (s *Lexer) readRegex() (*Token, error) {
 		tok := s.peek()
 
 		if tok == '\000' {
-			return nil, errors.New("lexer: non-terminated regex")
+			return nil, s.readError(row, col, "non-terminated string")
 		}
 
 		// check if the slash is escaped
@@ -627,11 +652,15 @@ func (s *Lexer) readRegex() (*Token, error) {
 	return &Token{
 		Raw:  builder.String(),
 		Type: REGEX,
+		Row:  row,
+		Col:  col,
 	}, nil
 }
 
 func (s *Lexer) readString() (*Token, error) {
 	var builder strings.Builder
+	row := s.row
+	col := s.col
 
 	s.read() // initial quote
 
@@ -639,7 +668,7 @@ func (s *Lexer) readString() (*Token, error) {
 		tok := s.peek()
 
 		if tok == '\000' {
-			return nil, errors.New("lexer: non-terminated string")
+			return nil, s.readError(row, col, "non-terminated string")
 		}
 
 		if tok == '"' {
@@ -658,5 +687,11 @@ func (s *Lexer) readString() (*Token, error) {
 	return &Token{
 		Raw:  builder.String(),
 		Type: STRING,
+		Row:  row,
+		Col:  col,
 	}, nil
+}
+
+func (l *Lexer) readError(row, col int, errorMsg string) error {
+	return errors.New(fmt.Sprintf("error %v:%v: %v", row, col, errorMsg))
 }

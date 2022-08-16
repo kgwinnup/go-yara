@@ -51,6 +51,13 @@ th ? can be on either side of the defined byte. In Go-yara, the ?
 char, regardless of its position, will treat the entire byte as a wild
 card byte.
 
+## Regex are more limited in go-yara
+
+Go-yara requires the regex to have a non-empty prefix. E.g. Regexes
+cannot start with things like `[0-9a-ZA-Z]{1,5}`. They can start with
+`(foobar|foobaz)` as the prefix will be `fooba`. For performance
+reasons, you should try and make the prefix as long as possible.
+
 # Example
 
 see the `cmd/main.go` for a full example

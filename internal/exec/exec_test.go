@@ -279,21 +279,18 @@ func TestRuleBytes(t *testing.T) {
 		t.Fatal("patterns failed to match")
 	}
 
-}
-
-func TestRuleBytes2(t *testing.T) {
-
-	rule := `rule Foobar : Tag1 {
+	rule = `rule Foobar : Tag1 {
     strings:
-        $s1 = { 41 41 41 [1-5] ( 42 | 43 ) } 
+        $s1 = { 41 41 41 [1-5] ( 48 | 49 ) } 
     condition:
         $s1
 }
 `
-	input := "AAADDC"
-	out, _ := testCompile(rule, input)
 
-	if len(out) == 0 {
+	input = "AAADB"
+	out, _ = testCompile(rule, input)
+
+	if len(out) != 0 {
 		t.Fatal("patterns failed to match")
 	}
 

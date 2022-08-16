@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ type Pattern struct {
 	// complete string with 0x10000 as place holders for bytes with ??
 	FullMatch []int
 	IsPartial bool
+	Re        *regexp.Regexp
 }
 
 type CompiledRule struct {
@@ -213,12 +216,11 @@ func Compile(input string) (*CompiledRules, error) {
 						Name:       fmt.Sprintf("%v_%v", rule.Name, assign.Left),
 						Pattern:    bytePattern.Patterns[0],
 						MatchIndex: index,
-						IsPartial:  len(bytePattern.Patterns[0]) == len(bytePattern.PartialPatterns[0]),
+						IsPartial:  len(bytePattern.Patterns[0]) != len(bytePattern.PartialPatterns[0]),
 						FullMatch:  bytePattern.PartialPatterns[0],
 					}
 					patterns = append(patterns, mainPattern)
 					compiled.mappings[mainPattern.Name] = mainPattern
-
 					index++
 
 					for i, pattern := range bytePattern.Patterns {
@@ -230,12 +232,41 @@ func Compile(input string) (*CompiledRules, error) {
 							Name:       fmt.Sprintf("%v_%v_%v", rule.Name, assign.Left, i),
 							Pattern:    pattern,
 							MatchIndex: mainPattern.MatchIndex,
-							IsPartial:  len(bytePattern.Patterns[0]) == len(bytePattern.PartialPatterns[0]),
-							FullMatch:  bytePattern.PartialPatterns[0],
+							IsPartial:  len(bytePattern.Patterns[i]) != len(bytePattern.PartialPatterns[i]),
+							FullMatch:  bytePattern.PartialPatterns[i],
 						}
 
 						patterns = append(patterns, temp)
 					}
+
+				} else if r, ok := assign.Right.(*ast.Regex); ok {
+					reStr := strings.TrimSuffix(strings.TrimPrefix(r.Value, "/"), "/")
+					re, err := regexp.Compile(reStr)
+					if err != nil {
+						return nil, err
+					}
+
+					min := 6
+
+					prefix, _ := re.LiteralPrefix()
+					if len(prefix) < min {
+						fmt.Fprintf(os.Stderr, fmt.Sprintf("warning %v:%v: slow regex, regex prefix should be greater than %v", r.Token.Row, r.Token.Col, min))
+					}
+
+					if len(prefix) == 0 {
+						return nil, errors.New(fmt.Sprintf("error %v:%v: bad regex pattern, no valid prefix to match on", r.Token.Row, r.Token.Col))
+					}
+
+					temp := &Pattern{
+						Name:       fmt.Sprintf("%v_%v", rule.Name, assign.Left),
+						Pattern:    bytePattern.Patterns[0],
+						MatchIndex: index,
+						Re:         re,
+					}
+					index++
+
+					compiled.mappings[temp.Name] = temp
+					patterns = append(patterns, temp)
 
 				} else {
 					return nil, errors.New("compiler: invalid strings type")

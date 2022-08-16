@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -152,7 +154,7 @@ func (b *Bytes) Type() int {
 func makeBytePatternInt(s string) (int, error) {
 
 	if strings.Contains(s, "?") {
-		return 0x10000, nil
+		return 0x1000, nil
 	}
 
 	if n, err := strconv.ParseInt(s, 16, 16); err != nil {
@@ -189,9 +191,25 @@ func (b *Bytes) BytePattern() ([][]int, error) {
 				return nil, errors.New("invalid range in byte pattern")
 			}
 
-			for k := 0; k < len(patterns); k++ {
-				patterns[k] = append(patterns[k], 0x10000)
+			opts := second - first + 1
+
+			// clone patterns len(opts) times
+			newpatterns := make([][]int, 0)
+
+			for i := 0; i < int(opts); i++ {
+				for _, pattern := range patterns {
+					dst := make([]int, len(pattern))
+					copy(dst, pattern)
+
+					for j := 0; j < i+1; j++ {
+						dst = append(dst, 0x1000)
+					}
+
+					newpatterns = append(newpatterns, dst)
+				}
 			}
+
+			patterns = newpatterns
 
 			i += 4
 			continue
@@ -225,19 +243,18 @@ func (b *Bytes) BytePattern() ([][]int, error) {
 			parts = append(parts, temp)
 
 			// clone patterns len(parts) times
-			for i := 0; i < len(parts)-1; i++ {
+			newpatterns := make([][]int, 0)
+			for _, part := range parts {
 				for _, pattern := range patterns {
 					dst := make([]int, len(pattern))
 					copy(dst, pattern)
 
-					patterns = append(patterns, dst)
+					dst = append(dst, part...)
+					newpatterns = append(newpatterns, dst)
 				}
 			}
 
-			for i := 0; i < len(patterns); i++ {
-				patterns[i] = append(patterns[i], parts[i%len(parts)]...)
-			}
-
+			patterns = newpatterns
 			continue
 		}
 
@@ -404,19 +421,6 @@ func (s *String) Type() int {
 	return STRING
 }
 
-type Regex struct {
-	Token *lexer.Token
-	Value string
-}
-
-func (r Regex) String() string {
-	return fmt.Sprintf("/%v/", r.Value)
-}
-
-func (r *Regex) Type() int {
-	return REGEX
-}
-
 type Bool struct {
 	Token *lexer.Token
 	Value bool
@@ -481,6 +485,41 @@ type BytePattern struct {
 	Nocase          bool
 	IsPartial       bool
 	PartialPatterns [][]int
+	Re              *regexp.Regexp
+}
+
+type Regex struct {
+	Token *lexer.Token
+	Value string
+}
+
+func (r Regex) String() string {
+	return fmt.Sprintf("/%v/", r.Value)
+}
+
+func (r *Regex) Type() int {
+	return REGEX
+}
+
+func (r *Regex) BytePattern() ([]byte, error) {
+	reStr := strings.TrimSuffix(strings.TrimPrefix(r.Value, "/"), "/")
+	re, err := regexp.Compile(reStr)
+	if err != nil {
+		return nil, err
+	}
+
+	min := 6
+
+	prefix, _ := re.LiteralPrefix()
+	if len(prefix) < min {
+		fmt.Fprintf(os.Stderr, fmt.Sprintf("warning %v:%v: slow regex, regex prefix should be greater than %v", r.Token.Row, r.Token.Col, min))
+	}
+
+	if len(prefix) == 0 {
+		return nil, errors.New(fmt.Sprintf("error %v:%v: bad regex pattern, no valid prefix to match on", r.Token.Row, r.Token.Col))
+	}
+
+	return []byte(prefix), nil
 }
 
 // BytePattern returns a byte slice which represents the pattern to
@@ -539,6 +578,16 @@ func (a *Assignment) BytePattern() (*BytePattern, error) {
 		return ret, nil
 	}
 
+	if r, ok := a.Right.(*Regex); ok {
+		pattern, err := r.BytePattern()
+		if err != nil {
+			return nil, err
+		}
+
+		ret.Patterns = append(ret.Patterns, pattern)
+		return ret, nil
+	}
+
 	if bs, ok := a.Right.(*Bytes); ok {
 		patterns, err := bs.BytePattern()
 		if err != nil {
@@ -551,7 +600,7 @@ func (a *Assignment) BytePattern() (*BytePattern, error) {
 			temp := make([]byte, 0)
 
 			for _, b := range pattern {
-				if b&0x10000 == 0x10000 {
+				if b&0x1000 == 0x1000 {
 					ret.IsPartial = true
 					break
 				}

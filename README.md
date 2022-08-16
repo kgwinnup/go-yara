@@ -22,8 +22,8 @@ parsers.
 - [x] virtual machine for evaluation 
 - [x] standard string pattern types
 - [x] bytes pattern types
+- [x] regex pattern types
 - [ ] optimize Aho-Corasick algorithm, make into table
-- [ ] regex pattern types
 - [ ] modules 
 
 # Differences with C Yara

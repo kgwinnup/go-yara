@@ -16,8 +16,10 @@ type ACNode struct {
 	matchOffset int
 	// signals that this particular node's match is a partial
 	// Match. The fullMatch value is the full value to match
-	// against, contains ?? bytes as well
-	fullMatch  [][]int
+	// against, contains ?? bytes as well. fullMatch can contain more
+	// than 1 potential match case.
+	fullMatch [][]int
+	// contains the match index for this full match pattern.
 	matchIndex []int
 	// signal if the node contains a regex prefix match. If there is a
 	// prefix match, check the input bytes starting at the prefix
@@ -59,6 +61,10 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 						node.fullMatch = append(node.fullMatch, pattern.FullMatch)
 						node.matchIndex = append(node.matchIndex, pattern.MatchIndex)
 					}
+
+					if pattern.Re != nil {
+						node.re = pattern.Re
+					}
 				}
 
 				cur = node
@@ -82,6 +88,10 @@ func ACBuild(patterns []*Pattern) []*ACNode {
 					node.fullMatch = append(node.fullMatch, pattern.FullMatch)
 					node.matchIndex = make([]int, 0)
 					node.matchIndex = append(node.matchIndex, pattern.MatchIndex)
+				}
+
+				if pattern.Re != nil {
+					node.re = pattern.Re
 				}
 
 			}
@@ -176,81 +186,16 @@ func ACNext(matches []*[]int, nodes []*ACNode, input []byte) {
 			node = new
 
 			// check if this node completes a match
-			if node.match >= 0 && node.fullMatch == nil {
-				if lst := matches[node.match]; lst != nil {
-					*lst = append(*lst, i-node.matchOffset)
-				} else {
-					matches[node.match] = &[]int{i - node.matchOffset}
-				}
+			if node.match >= 0 {
 
-			}
-
-			if node.match >= 0 && node.fullMatch != nil {
-				for k, part := range node.fullMatch {
-
-					match := true
-
-					for j := 0; j < len(part); j++ {
-						if part[j]&0x1000 == 0x1000 {
-							continue
-						}
-
-						if j+i-node.matchOffset >= len(input) {
-							match = false
-							break
-						}
-
-						if byte(part[j]) != input[j+i-node.matchOffset] {
-							match = false
-							break
-						}
-					}
-
-					if match {
-						if lst := matches[node.matchIndex[k]]; lst != nil {
-							*lst = append(*lst, i-node.matchOffset)
-						} else {
-							matches[node.matchIndex[k]] = &[]int{i - node.matchOffset}
-						}
-
-						break
-					}
-				}
-
-			}
-
-			if node.match >= 0 && node.re != nil {
-				indexes := node.re.FindAllIndex(input[i-node.matchOffset:], -1)
-
-				if len(matches) > 0 {
-					base := i - node.matchOffset
-					for _, i := range indexes {
-						if lst := matches[node.match]; lst != nil {
-							*lst = append(*lst, base+i[0])
-						} else {
-							matches[node.match] = &[]int{base + i[0]}
-						}
-					}
-				}
-
-			}
-
-			// jump to each alternative matching node if they exist
-			temp := node.alternative
-			for {
-				if temp == nil {
-					break
-				}
-
-				if temp.match >= 0 && temp.fullMatch == nil {
-					if lst := matches[temp.match]; lst != nil {
-						*lst = append(*lst, i-temp.matchOffset)
+				if node.fullMatch == nil && node.re == nil {
+					if lst := matches[node.match]; lst != nil {
+						*lst = append(*lst, i-node.matchOffset)
 					} else {
-						matches[temp.match] = &[]int{i - temp.matchOffset}
+						matches[node.match] = &[]int{i - node.matchOffset}
 					}
 
-				} else if temp.match >= 0 && node.fullMatch != nil {
-
+				} else if node.fullMatch != nil {
 					for k, part := range node.fullMatch {
 
 						match := true
@@ -272,17 +217,17 @@ func ACNext(matches []*[]int, nodes []*ACNode, input []byte) {
 						}
 
 						if match {
-							if lst := matches[temp.matchIndex[k]]; lst != nil {
-								*lst = append(*lst, i-temp.matchOffset)
+							if lst := matches[node.matchIndex[k]]; lst != nil {
+								*lst = append(*lst, i-node.matchOffset)
 							} else {
-								matches[temp.matchIndex[k]] = &[]int{i - temp.matchOffset}
+								matches[node.matchIndex[k]] = &[]int{i - node.matchOffset}
 							}
 
 							break
 						}
 					}
 
-				} else if node.match >= 0 && node.re != nil {
+				} else if node.re != nil {
 					indexes := node.re.FindAllIndex(input[i-node.matchOffset:], -1)
 
 					if len(matches) > 0 {
@@ -296,6 +241,72 @@ func ACNext(matches []*[]int, nodes []*ACNode, input []byte) {
 						}
 					}
 
+				}
+			}
+
+			// jump to each alternative matching node if they exist
+			temp := node.alternative
+			for {
+				if temp == nil {
+					break
+				}
+
+				if node.match >= 0 {
+
+					if node.fullMatch == nil && node.re == nil {
+						if lst := matches[node.match]; lst != nil {
+							*lst = append(*lst, i-node.matchOffset)
+						} else {
+							matches[node.match] = &[]int{i - node.matchOffset}
+						}
+
+					} else if node.fullMatch != nil {
+						for k, part := range node.fullMatch {
+
+							match := true
+
+							for j := 0; j < len(part); j++ {
+								if part[j]&0x1000 == 0x1000 {
+									continue
+								}
+
+								if j+i-node.matchOffset >= len(input) {
+									match = false
+									break
+								}
+
+								if byte(part[j]) != input[j+i-node.matchOffset] {
+									match = false
+									break
+								}
+							}
+
+							if match {
+								if lst := matches[node.matchIndex[k]]; lst != nil {
+									*lst = append(*lst, i-node.matchOffset)
+								} else {
+									matches[node.matchIndex[k]] = &[]int{i - node.matchOffset}
+								}
+
+								break
+							}
+						}
+
+					} else if node.re != nil {
+						indexes := node.re.FindAllIndex(input[i-node.matchOffset:], -1)
+
+						if len(matches) > 0 {
+							base := i - node.matchOffset
+							for _, i := range indexes {
+								if lst := matches[node.match]; lst != nil {
+									*lst = append(*lst, base+i[0])
+								} else {
+									matches[node.match] = &[]int{base + i[0]}
+								}
+							}
+						}
+
+					}
 				}
 
 				temp = temp.alternative
@@ -344,12 +355,61 @@ func ACNextNocase(matches []*[]int, nodes []*ACNode, input []byte) {
 			// transition to the next node
 			node = new
 
-			// check if this node completes a match
 			if node.match >= 0 {
-				if lst := matches[node.match]; lst != nil {
-					*lst = append(*lst, i-node.matchOffset)
-				} else {
-					matches[node.match] = &[]int{i - node.matchOffset}
+
+				if node.fullMatch == nil && node.re == nil {
+					if lst := matches[node.match]; lst != nil {
+						*lst = append(*lst, i-node.matchOffset)
+					} else {
+						matches[node.match] = &[]int{i - node.matchOffset}
+					}
+
+				} else if node.fullMatch != nil {
+					for k, part := range node.fullMatch {
+
+						match := true
+
+						for j := 0; j < len(part); j++ {
+							if part[j]&0x1000 == 0x1000 {
+								continue
+							}
+
+							if j+i-node.matchOffset >= len(input) {
+								match = false
+								break
+							}
+
+							if byte(part[j]) != input[j+i-node.matchOffset] {
+								match = false
+								break
+							}
+						}
+
+						if match {
+							if lst := matches[node.matchIndex[k]]; lst != nil {
+								*lst = append(*lst, i-node.matchOffset)
+							} else {
+								matches[node.matchIndex[k]] = &[]int{i - node.matchOffset}
+							}
+
+							break
+						}
+					}
+
+				} else if node.re != nil {
+					indexes := node.re.FindAllIndex(input[i-node.matchOffset:], -1)
+
+					if len(matches) > 0 {
+						base := i - node.matchOffset
+						for _, i := range indexes {
+							if lst := matches[node.match]; lst != nil {
+								*lst = append(*lst, base+i[0])
+							} else {
+								matches[node.match] = &[]int{base + i[0]}
+							}
+						}
+					}
+
 				}
 			}
 
@@ -360,10 +420,62 @@ func ACNextNocase(matches []*[]int, nodes []*ACNode, input []byte) {
 					break
 				}
 
-				if lst := matches[node.match]; lst != nil {
-					*lst = append(*lst, i-node.matchOffset)
-				} else {
-					matches[node.match] = &[]int{i - node.matchOffset}
+				if node.match >= 0 {
+
+					if node.fullMatch == nil && node.re == nil {
+						if lst := matches[node.match]; lst != nil {
+							*lst = append(*lst, i-node.matchOffset)
+						} else {
+							matches[node.match] = &[]int{i - node.matchOffset}
+						}
+
+					} else if node.fullMatch != nil {
+						for k, part := range node.fullMatch {
+
+							match := true
+
+							for j := 0; j < len(part); j++ {
+								if part[j]&0x1000 == 0x1000 {
+									continue
+								}
+
+								if j+i-node.matchOffset >= len(input) {
+									match = false
+									break
+								}
+
+								if byte(part[j]) != input[j+i-node.matchOffset] {
+									match = false
+									break
+								}
+							}
+
+							if match {
+								if lst := matches[node.matchIndex[k]]; lst != nil {
+									*lst = append(*lst, i-node.matchOffset)
+								} else {
+									matches[node.matchIndex[k]] = &[]int{i - node.matchOffset}
+								}
+
+								break
+							}
+						}
+
+					} else if node.re != nil {
+						indexes := node.re.FindAllIndex(input[i-node.matchOffset:], -1)
+
+						if len(matches) > 0 {
+							base := i - node.matchOffset
+							for _, i := range indexes {
+								if lst := matches[node.match]; lst != nil {
+									*lst = append(*lst, base+i[0])
+								} else {
+									matches[node.match] = &[]int{base + i[0]}
+								}
+							}
+						}
+
+					}
 				}
 
 				temp = temp.alternative

@@ -502,8 +502,7 @@ func (r *Regex) Type() int {
 }
 
 func (r *Regex) BytePattern() ([]byte, error) {
-	reStr := strings.TrimSuffix(strings.TrimPrefix(r.Value, "/"), "/")
-	re, err := regexp.Compile(reStr)
+	re, err := regexp.Compile(r.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +511,7 @@ func (r *Regex) BytePattern() ([]byte, error) {
 
 	prefix, _ := re.LiteralPrefix()
 	if len(prefix) < min {
-		fmt.Fprintf(os.Stderr, fmt.Sprintf("warning %v:%v: slow regex, regex prefix should be greater than %v", r.Token.Row, r.Token.Col, min))
+		fmt.Fprintf(os.Stderr, fmt.Sprintf("warning %v:%v: slow regex, regex prefix should be greater than %v, '%v'\n", r.Token.Row, r.Token.Col, min, prefix))
 	}
 
 	if len(prefix) == 0 {

@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -240,21 +239,9 @@ func Compile(input string) (*CompiledRules, error) {
 					}
 
 				} else if r, ok := assign.Right.(*ast.Regex); ok {
-					reStr := strings.TrimSuffix(strings.TrimPrefix(r.Value, "/"), "/")
-					re, err := regexp.Compile(reStr)
+					re, err := regexp.Compile(r.Value)
 					if err != nil {
 						return nil, err
-					}
-
-					min := 6
-
-					prefix, _ := re.LiteralPrefix()
-					if len(prefix) < min {
-						fmt.Fprintf(os.Stderr, fmt.Sprintf("warning %v:%v: slow regex, regex prefix should be greater than %v", r.Token.Row, r.Token.Col, min))
-					}
-
-					if len(prefix) == 0 {
-						return nil, errors.New(fmt.Sprintf("error %v:%v: bad regex pattern, no valid prefix to match on", r.Token.Row, r.Token.Col))
 					}
 
 					temp := &Pattern{

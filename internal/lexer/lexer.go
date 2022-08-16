@@ -267,6 +267,7 @@ func (s *Lexer) next() (*Token, error) {
 	switch s.input[s.index] {
 	case '/':
 		s.read()
+
 		if s.peek() == '/' {
 			s.read()
 			var builder strings.Builder
@@ -293,7 +294,10 @@ func (s *Lexer) next() (*Token, error) {
 			return s.readComment()
 		}
 
-		return &Token{Raw: "/", Type: DIVIDE, Row: s.row, Col: s.col}, nil
+		return s.readRegex()
+
+	case '\\':
+		return &Token{Raw: "\\", Type: DIVIDE, Row: s.row, Col: s.col}, nil
 
 	case ',':
 		s.read()
@@ -417,7 +421,6 @@ func (s *Lexer) next() (*Token, error) {
 		}
 
 		return &Token{Raw: "=", Type: ASSIGNMENT, Row: s.row, Col: s.col}, nil
-
 	case '"':
 		return s.readString()
 
@@ -610,8 +613,6 @@ func (s *Lexer) readRegex() (*Token, error) {
 	var builder strings.Builder
 	row := s.row
 	col := s.col
-
-	s.read() // initial slash
 
 	for {
 		tok := s.peek()

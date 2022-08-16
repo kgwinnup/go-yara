@@ -327,3 +327,17 @@ func TestBase64(t *testing.T) {
 		t.Fatal("failed to match base64")
 	}
 }
+
+func TestRegex(t *testing.T) {
+	rule := `rule Foobar {
+    strings:
+        $s1 = /(foobar|foobaz)[0-9]{1,2}/ 
+    condition:
+        $s1
+}`
+
+	out, _ := testCompile(rule, "foobar12")
+	if len(out) == 0 {
+		t.Fatal("failed to match regex")
+	}
+}

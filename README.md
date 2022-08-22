@@ -23,7 +23,6 @@ parsers.
 - [x] standard string pattern types
 - [x] bytes pattern types
 - [x] regex pattern types
-- [ ] optimize Aho-Corasick algorithm, make into table
 - [ ] modules 
 
 # Differences with C Yara
